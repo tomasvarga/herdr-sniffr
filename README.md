@@ -34,6 +34,7 @@ git clone https://github.com/tomasvarga/sniffr ~/Documents/GitHub/sniffr
 sniffr <pr>                 # number | owner/repo#N | URL   (run from a herdr pane)
 sniffr <pr> --agent grok    # one-off agent override
 sniffr --set-agent grok     # save the default agent (--show-agent prints it)
+sniffr queue                # pick from the PRs actually awaiting your review
 ```
 
 Pick the agent (first match wins): `--agent` flag · `SNIFFR_AGENT` env · saved
@@ -42,6 +43,35 @@ cursor · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command
 (gets the review prompt on stdin, must print a JSON array of findings). Findings
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
+
+### `sniffr queue` — pick from your review list
+
+Instead of pasting a URL, ask GitHub what's waiting on you and pick from a menu:
+
+```bash
+sniffr queue                # menu of PRs awaiting your review → pick → sniff it
+sniffr queue --agent grok   # …and use grok on whatever you pick
+```
+
+It runs one `gh search` for open PRs where you're a requested reviewer (across
+**all** your repos — no checkout), then filters to what actually matters by
+default:
+
+- **no bots** — drops Dependabot/Renovate dependency bumps
+- **no drafts** — skips WIP
+- **recent only** — activity in the last **3 weeks** (buries stale/dangling
+  review requests)
+
+Arrow keys / number to select, `q` to cancel. Picking a PR runs the normal
+`sniffr <pr>` path on it — so `queue` is purely a target-picker and never
+diverges from the manual flow. Dials for when the defaults are wrong:
+
+```bash
+sniffr queue --since 2mo    # widen the activity window (21d|3w|2mo|1y)
+sniffr queue --all          # the full list: bots + drafts + no date cutoff
+sniffr queue --include-bots # add bots back
+sniffr queue --drafts       # add drafts back
+```
 
 ## Requirements
 

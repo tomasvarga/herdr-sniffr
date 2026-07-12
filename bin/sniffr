@@ -6,6 +6,7 @@
 #
 #   sniffr <pr>                  pr = number | owner/repo#N | URL
 #   sniffr <pr> --agent grok
+#   sniffr queue [--since 3w]    pick from the PRs awaiting your review
 #
 # Agent (first match wins): --agent flag · SNIFFR_AGENT env · saved default
 # (`sniffr --set-agent <name>`, stored in ~/.config/sniffr/agent) · codex.
@@ -131,6 +132,92 @@ if [ "${1:-}" = "--bg" ]; then
   disown 2>/dev/null || true
   notify "sniffr" "${AGENT} is sniffing PR #${num} in the background…"
   exit 0
+fi
+
+# ==================== queue: pick a PR from your review list ===================
+# A target picker only — the choice is handed back to the normal path via exec,
+# so `queue` can never drift from `sniffr <pr>`. Defaults: recent · human · ready.
+if [ "${1:-}" = "queue" ]; then
+  shift
+  since="21d"; want_bots=0; want_drafts=0; agent_pass=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --since)   since="${2:-}"; shift 2 ;;
+      --since=*) since="${1#*=}"; shift ;;
+      --agent)   agent_pass="${2:-}"; shift 2 ;;
+      --agent=*) agent_pass="${1#*=}"; shift ;;
+      --all)     since=""; want_bots=1; want_drafts=1; shift ;;
+      --include-bots) want_bots=1; shift ;;
+      --drafts)  want_drafts=1; shift ;;
+      -*) die "queue: unknown flag: $1" ;;
+      *)  die "queue takes no positional args (got '$1')" ;;
+    esac
+  done
+  for b in gh jq; do command -v "$b" >/dev/null || die "missing dependency: $b"; done
+
+  # --since 21d|3w|2mo|1y  →  a `gh --updated` server-side date filter
+  updated=""
+  if [ -n "$since" ]; then
+    case "$since" in
+      *mo)    adj="-v-${since%mo}m" ;;            # months (macOS date: m=month)
+      *[dwy]) adj="-v-${since}" ;;                # days / weeks / years
+      *) die "queue: --since wants e.g. 21d, 3w, 2mo, 1y (got '$since')" ;;
+    esac
+    cutoff=$(date $adj +%Y-%m-%d 2>/dev/null) || die "queue: bad --since '$since'"
+    updated=">=$cutoff"
+  fi
+
+  # opt-out filters as jq predicates
+  botf='select(.author.login | test("dependabot|renovate|-bot$|\\[bot\\]") | not)'
+  [ "$want_bots" = 1 ] && botf='.'
+  draftf='select(.isDraft | not)'
+  [ "$want_drafts" = 1 ] && draftf='.'
+
+  rows=$(gh search prs --review-requested=@me --state=open --limit 200 \
+           ${updated:+--updated "$updated"} \
+           --json url,title,repository,author,isDraft,updatedAt \
+           --jq ".[] | $botf | $draftf
+                 | [.updatedAt, .url, (.repository.nameWithOwner + \"  —  \" + .title)]
+                 | @tsv" 2>/dev/null | sort -r)
+  [ -n "$rows" ] || { echo "sniffr queue: nothing needs your review${since:+ (active in last $since)}."; exit 0; }
+
+  urls=(); labels=(); n=0
+  while IFS=$'\t' read -r _u url label; do
+    [ -n "$url" ] || continue
+    urls[$n]="$url"; labels[$n]="$label"; n=$((n+1))
+  done <<EOF
+$rows
+EOF
+
+  sel=0; esc=$(printf '\033')
+  draw(){
+    printf '%s[1mNeeds your review (%d)%s[0m\r\n' "$esc" "$n" "$esc"
+    local i
+    for i in $(seq 0 $((n-1))); do
+      if [ "$i" = "$sel" ]; then printf '%s[7m → [%d] %s %s[0m\r\n' "$esc" $((i+1)) "${labels[$i]}" "$esc"
+      else                       printf '   [%d] %s\r\n' $((i+1)) "${labels[$i]}"; fi
+    done
+    printf '   [q] cancel\r\n'
+  }
+  cleanup(){ printf '%s[?25h' "$esc"; }
+  trap cleanup EXIT
+  printf '%s[?25l' "$esc"; draw
+  while IFS= read -rsn1 key; do
+    case "$key" in
+      "$esc") IFS= read -rsn2 rest
+              case "$rest" in "[A") sel=$(((sel-1+n)%n)) ;; "[B") sel=$(((sel+1)%n)) ;; esac ;;
+      q|Q) cleanup; echo "queue: cancelled."; exit 0 ;;
+      [1-9]) idx=$((key-1)); [ "$idx" -lt "$n" ] && { sel=$idx; break; } ;;
+      "") break ;;                                 # Enter
+    esac
+    printf '%s[%dA' "$esc" $((n+1)); draw
+  done
+  cleanup
+  chosen="${urls[$sel]}"
+  [ -n "$chosen" ] || exit 0
+  echo "sniffr: → $chosen"
+  if [ -n "$agent_pass" ]; then exec "$0" --agent "$agent_pass" "$chosen"
+  else                          exec "$0" "$chosen"; fi
 fi
 
 # ========================= MAIN: open tuicr + spawn worker ====================
