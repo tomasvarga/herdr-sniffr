@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+# sniffr — an AI sniffs a PR for issues before you review it. Opens the PR in
+# tuicr IMMEDIATELY, then an agent reviews the diff in the BACKGROUND and injects
+# its findings as tuicr local-draft comments (never pushed); the pane reloads
+# when they land. You start reading right away — comments appear a few sec later.
+#
+#   sniffr <pr>                  pr = number | owner/repo#N | URL
+#   sniffr <pr> --agent grok
+#
+# Agent (first match wins): --agent flag · SNIFFR_AGENT env · saved default
+# (`sniffr --set-agent <name>`, stored in ~/.config/sniffr/agent) · codex.
+# SNIFFR_CMD='<cmd>' escape hatch (prompt on stdin -> JSON array on stdout).
+# Built-ins: codex · claude · cursor · grok · opencode · ollama.
+set -uo pipefail
+die(){ echo "sniffr: $*" >&2; exit 1; }
+
+CONF_DIR="$HOME/.config/sniffr"
+
+# default agent: SNIFFR_AGENT env → saved default file → codex
+default_agent(){
+  if [ -n "${SNIFFR_AGENT:-}" ]; then printf '%s' "$SNIFFR_AGENT"
+  elif [ -s "$CONF_DIR/agent" ]; then tr -d '[:space:]' < "$CONF_DIR/agent"
+  else printf 'codex'; fi
+}
+
+# notify <title> <body> [sound] — prefer the OS notifier (persists in the macOS
+# notification centre with full text) over herdr's brief in-app toast.
+notify(){
+  local title="$1" body="$2" sound="${3:-}"
+  if command -v terminal-notifier >/dev/null 2>&1; then
+    terminal-notifier -title "$title" -message "$body" ${sound:+-sound Ping} >/dev/null 2>&1
+  elif command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"${body//\"/}\" with title \"${title//\"/}\"" >/dev/null 2>&1
+  elif command -v herdr >/dev/null 2>&1; then
+    herdr notification show "$title" --body "$body" ${sound:+--sound "$sound"} >/dev/null 2>&1
+  fi
+}
+
+# resolve a PR target into repo / number / tuicr slug
+resolve(){
+  case "$1" in
+    https://github.com/*/pull/*)
+      repo=$(printf '%s' "$1" | sed -E 's#https://github.com/([^/]+/[^/]+)/pull/.*#\1#')
+      num=$(printf  '%s' "$1" | sed -E 's#.*/pull/([0-9]+).*#\1#') ;;
+    */*\#*) repo="${1%#*}"; num="${1#*#}" ;;
+    *[0-9]) repo=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) \
+              || die "bare number needs a repo cwd; pass owner/repo#N or a URL"
+            num="$1" ;;
+    *) die "unrecognized PR target: $1" ;;
+  esac
+  slug="gh:$repo/pr/${num}"
+}
+
+# ===================== WORKER: review, inject, reload (bg) =====================
+if [ "${1:-}" = "--worker" ]; then
+  target="$2"; pid="$3"
+  AGENT="$(default_agent)"; MAX="${SNIFFR_MAX:-8}"
+  resolve "$target"
+  diff=$(gh pr diff "${num}" --repo "$repo" 2>/dev/null) || exit 0
+  [ -n "$diff" ] || exit 0
+  prompt="You are a senior code reviewer. Review this pull-request unified diff.
+Report ONLY high-signal findings: bugs, security issues, correctness risks, and
+important design concerns. No nits, no style preferences.
+Output ONLY a JSON array — no prose, no markdown fences. Each item:
+{\"file\":\"<path, new side>\",\"line\":<new-side line number, or null>,\"type\":\"bug|risk|question|note\",\"body\":\"<concise finding>\"}
+Use the @@ hunk headers to compute new-side line numbers. At most ${MAX} items.
+If nothing significant, output [].
+
+DIFF:
+${diff}"
+  scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
+  run_agent(){
+    if [ -n "${SNIFFR_CMD:-}" ]; then printf '%s' "$prompt" | ( cd "$scratch" && eval "$SNIFFR_CMD" ); return; fi
+    ( cd "$scratch"
+      case "$AGENT" in
+        codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check - 2>/dev/null ;;
+        claude)              printf '%s' "$prompt" | claude -p 2>/dev/null ;;
+        cursor|cursor-agent) cursor-agent -p --output-format text "$prompt" 2>/dev/null ;;
+        grok)                grok --output-format text "$prompt" 2>/dev/null ;;
+        opencode)            opencode run "$prompt" 2>/dev/null ;;
+        ollama)              printf '%s' "$prompt" | ollama run "${SNIFFR_MODEL:-llama3.1}" 2>/dev/null ;;
+      esac )
+  }
+  raw=$(run_agent)
+  findings=$(printf '%s' "$raw" | python3 -c '
+import sys, json
+s = sys.stdin.read(); i = s.find("[")
+while i != -1:
+    for j in range(len(s), i, -1):
+        try:
+            v = json.loads(s[i:j])
+            if isinstance(v, list): print(json.dumps(v)); sys.exit(0)
+        except Exception: pass
+    i = s.find("[", i + 1)
+print("[]")')
+  # wait for tuicr to open the PR and persist the session to disk
+  found=0
+  for _ in $(seq 1 45); do
+    if tuicr review list --repo "$repo" 2>/dev/null | jq -e --arg s "$slug" 'any(.[]?; .slug==$s)' >/dev/null 2>&1; then found=1; break; fi
+    sleep 0.7
+  done
+  n=0
+  if [ "$found" = 1 ]; then
+    while IFS= read -r item; do
+      [ -n "$item" ] || continue
+      file=$(jq -r '.file // empty'  <<<"$item"); line=$(jq -r '.line // empty' <<<"$item")
+      typ=$( jq -r '.type // "note"' <<<"$item"); body=$(jq -r '.body // empty' <<<"$item")
+      [ -n "$file" ] && [ -n "$body" ] || continue
+      if [ -n "$line" ] && [ "$line" != "null" ]; then
+        tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --line "$line" --side new --username "$AGENT" "$body" >/dev/null 2>&1 && n=$((n+1))
+      else
+        tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --username "$AGENT" "$body" >/dev/null 2>&1 && n=$((n+1))
+      fi
+    done < <(printf '%s' "$findings" | jq -c '.[]?')
+    [ -n "$pid" ] && { herdr pane send-text "$pid" ":e" >/dev/null 2>&1; herdr pane send-text "$pid" $'\r' >/dev/null 2>&1; }
+  fi
+  if   [ "$found" != 1 ]; then notify "sniffr" "$AGENT couldn't attach to the tuicr session for PR #${num} — is it still open?"
+  elif [ "$n" -gt 0 ];    then notify "sniffr — review ready" "$AGENT left $n comment(s) on PR #${num}. Press :e in tuicr if they haven't loaded." done
+  else                         notify "sniffr" "$AGENT sniffed PR #${num} and flagged nothing."
+  fi
+  exit 0
+fi
+
+# ============ BG: launch the review worker only (caller opens tuicr) ===========
+if [ "${1:-}" = "--bg" ]; then
+  target="$2"; pid="${3:-}"
+  AGENT="$(default_agent)"
+  resolve "$target"
+  log="${TMPDIR:-/tmp}/sniffr-${num}.log"
+  SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" >"$log" 2>&1 </dev/null &
+  disown 2>/dev/null || true
+  notify "sniffr" "${AGENT} is sniffing PR #${num} in the background…"
+  exit 0
+fi
+
+# ========================= MAIN: open tuicr + spawn worker ====================
+AGENT="$(default_agent)"; target=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --agent) AGENT="${2:-}"; shift 2 ;;
+    --agent=*) AGENT="${1#*=}"; shift ;;
+    --set-agent) a="${2:-}"; [ -n "$a" ] || die "usage: sniffr --set-agent <name>"
+      case "$a" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) ;;
+        *) echo "sniffr: note — '$a' isn't a built-in; set SNIFFR_CMD for a custom tool" >&2 ;; esac
+      mkdir -p "$CONF_DIR"; printf '%s\n' "$a" > "$CONF_DIR/agent"
+      echo "sniffr: default agent set to '$a' (~/.config/sniffr/agent)"; exit 0 ;;
+    --show-agent) echo "sniffr: default agent = $(default_agent)"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -*) die "unknown flag: $1" ;;
+    *) target="$1"; shift ;;
+  esac
+done
+[ -n "$target" ] || die "usage: sniffr <pr> [--agent NAME]"
+for b in gh jq tuicr python3 herdr; do command -v "$b" >/dev/null || die "missing dependency: $b"; done
+if [ -z "${SNIFFR_CMD:-}" ]; then
+  case "$AGENT" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
+    *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
+fi
+[ -n "${HERDR_SOCKET_PATH:-}" ] || die "not inside herdr — run this from a herdr pane"
+resolve "$target"
+
+# open tuicr right away in a split so you can start reading immediately
+out=$(herdr pane split --current --direction right --focus 2>/dev/null || true)
+pid=$(printf '%s' "$out" | jq -r '.result.pane.pane_id // empty')
+[ -n "$pid" ] || die "could not open a herdr split"
+# NOT exec: an exec'd tuicr launched via `pane run` exits right after load
+herdr pane run "$pid" "tuicr pr $target"
+
+# review in a detached background worker; it injects + reloads when ready
+log="${TMPDIR:-/tmp}/sniffr-${num}.log"
+SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" >"$log" 2>&1 </dev/null &
+disown 2>/dev/null || true
+notify "sniffr" "$AGENT is sniffing PR #${num} in the background…"
+echo "sniffr: opened #${num} in tuicr — $AGENT sniffing in the background."
