@@ -113,6 +113,15 @@ prompt = "You are a security-focused reviewer. Prioritize auth and input validat
 max    = 8
 ```
 
+**Pane placement** — how the reviewer opens in herdr (default: a right split):
+
+```toml
+[pane]
+placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
+direction = "right"   # "right" or "down"
+ratio     = 0.5        # split size, 0.0–1.0
+```
+
 ### Backends — where the findings go
 
 sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a

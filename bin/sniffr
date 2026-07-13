@@ -527,10 +527,18 @@ fi
 [ -n "${HERDR_SOCKET_PATH:-}" ] || die "not inside herdr — run this from a herdr pane"
 resolve "$target"
 
-# open the review viewer right away in a split so you can start reading immediately
-out=$(herdr pane split --current --direction right --focus 2>/dev/null || true)
+# open the review viewer right away so you can start reading immediately.
+# pane placement is configurable via [pane] in config.toml:
+#   placement = "split" (default) | "zoom"   direction = "right"|"down"   ratio = 0.5
+PANE_PLACEMENT="$(cfg_json | jq -r '.pane.placement // "split"')"
+PANE_DIR="$(cfg_json | jq -r '.pane.direction // "right"')"
+PANE_RATIO="$(cfg_json | jq -r '.pane.ratio // empty')"
+case "$PANE_DIR" in right|down) ;; *) PANE_DIR="right" ;; esac
+out=$(herdr pane split --current --direction "$PANE_DIR" ${PANE_RATIO:+--ratio "$PANE_RATIO"} --focus 2>/dev/null || true)
 pid=$(printf '%s' "$out" | jq -r '.result.pane.pane_id // empty')
 [ -n "$pid" ] || die "could not open a herdr split"
+# "zoom" → maximize the reviewer pane over the workspace (toggle back with herdr's zoom key)
+[ "$PANE_PLACEMENT" = "zoom" ] && herdr pane zoom "$pid" --on >/dev/null 2>&1 || true
 # NOT exec: an exec'd TUI launched via `pane run` exits right after load
 DIFF_PATH=""
 case "$backend" in

@@ -20,6 +20,13 @@ backend = "tuicr"
 #
 # max = 8   # cap on findings per review (SNIFFR_MAX env overrides)
 
+# --- Review pane ------------------------------------------------------------
+# How sniffr opens the reviewer inside herdr. Defaults: a right-hand split.
+# [pane]
+# placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
+# direction = "right"   # split direction: "right" or "down"
+# ratio     = 0.5        # split size, 0.0–1.0
+
 # --- Custom backends --------------------------------------------------------
 # Define your own review tool as a backend. sniffr resolves the agent's findings
 # (a JSON array of {file, line, type, body}, line-anchored by content), then:
