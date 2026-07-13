@@ -97,6 +97,9 @@ Linux (`sniffr doctor` verifies all of the above).
   parses the diff to resolve the real new-side line number (the agent's own count
   is only a tiebreaker). A quote that can't be matched becomes a file-level comment.
 - Comments are **local drafts** — never pushed until you submit them in tuicr.
+- **Re-running duplicates comments.** sniffr appends; it doesn't dedup against a
+  previous pass (tuicr has no CLI to remove drafts). Prune in the TUI — `dd` drops
+  one, `:clearc` clears all — before re-sniffing the same PR.
 
 ## License
 
