@@ -43,9 +43,10 @@ git clone https://github.com/tomasvarga/sniffr ~/Documents/GitHub/sniffr
 ```bash
 sniffr <pr>                 # number | owner/repo#N | URL   (run from a herdr pane)
 sniffr <pr> --agent grok    # one-off agent override
+sniffr <pr> --backend hunk  # deliver findings to hunk instead of tuicr
 sniffr --set-agent grok     # save the default agent (--show-agent prints it)
 sniffr queue                # pick from the PRs actually awaiting your review
-sniffr doctor               # preflight: deps, herdr, gh auth, agent, notifier
+sniffr doctor               # preflight: deps, herdr, gh auth, agent, backend
 ```
 
 Pick the agent (first match wins): `--agent` flag · `SNIFFR_AGENT` env · saved
@@ -54,6 +55,33 @@ cursor · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command
 (gets the review prompt on stdin, must print a JSON array of findings). Findings
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
+
+### Backends — where the findings go
+
+sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a
+**backend** decides how they're presented. Pick one (first match wins):
+`--backend` flag · `SNIFFR_BACKEND` env · `backend =` in
+`~/.config/sniffr/config.toml` · **`tuicr`** (default).
+
+- **`tuicr`** (built-in, default) — opens `tuicr pr`, injects local-draft
+  comments into the live session, reloads.
+- **`hunk`** ([hunk.dev](https://hunk.dev), built-in) — opens `hunk patch`,
+  injects into the live hunk session via its comment API. Same async model.
+- **custom** — define your own reviewer in `config.toml`. sniffr resolves the
+  findings, then runs your `open` command (launch the viewer in a split) and
+  pipes the findings JSON to your `inject` command:
+
+  ```toml
+  # ~/.config/sniffr/config.toml
+  backend = "tuicr"          # the default when --backend / env aren't set
+
+  [backends.myreviewr]
+  open   = "myreviewr open {url}"   # {url} {repo} {num} {diff} {pane}
+  inject = "myreviewr import --stdin"
+  ```
+
+  This is how any other review tool (e.g. herdr-reviewr) plugs in without sniffr
+  hardcoding its API. See [`config/config.example.toml`](config/config.example.toml).
 
 ### `sniffr queue` — pick from your review list
 
@@ -86,10 +114,11 @@ sniffr queue --drafts       # add drafts back
 
 ## Requirements
 
-**herdr ≥ 0.7.0**, **tuicr**, `gh` (authenticated), `jq`, `python3`, and at
-least one **agent CLI** (codex/claude/cursor/grok/opencode/ollama) installed and
-on your `PATH`. Runs from inside a herdr pane. GitHub only for now. macOS and
-Linux (`sniffr doctor` verifies all of the above).
+**herdr ≥ 0.7.0**, `gh` (authenticated), `jq`, `python3` (≥3.11 for config), and
+at least one **agent CLI** (codex/claude/cursor/grok/opencode/ollama) on your
+`PATH`. Plus the binary for your backend: **tuicr** (default) or
+**[hunk](https://hunk.dev)**. Runs from inside a herdr pane. GitHub only for now.
+macOS and Linux (`sniffr doctor` verifies all of the above).
 
 ## Limitations
 
