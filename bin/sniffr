@@ -108,14 +108,17 @@ ${diff}"
       esac )
   }
   raw=$(run_agent)
+  printf '%s' "$raw" > "$scratch/agent.out"
   # Extract the agent's JSON array, then ANCHOR each finding to a real line by
   # matching its verbatim `code` quote against the diff's new-side lines. The
   # agent's counted `line` is only a fallback/tiebreaker — quotes don't drift.
-  findings=$(printf '%s' "$raw" | python3 - "$scratch/diff.patch" <<'PY'
+  # NB: the program is fed via the heredoc on stdin, so the agent output and the
+  # diff are passed as FILE ARGS — piping into `python3 -` would clobber stdin.
+  findings=$(python3 - "$scratch/diff.patch" "$scratch/agent.out" <<'PY'
 import sys, json, re, os
 
 diff_path = sys.argv[1]
-raw = sys.stdin.read()
+raw = open(sys.argv[2], errors="replace").read()
 
 def extract_array(s):
     i = s.find("[")
