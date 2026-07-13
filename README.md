@@ -66,6 +66,16 @@ cursor · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
 
+**Tune the review** — set `prompt` in `~/.config/sniffr/config.toml` to change
+*what* the agent looks for (security-only, perf-sensitive, project rules, …).
+sniffr always appends the machine-readable output contract itself, so you only
+describe the focus, never the format. `max` caps findings per review.
+
+```toml
+prompt = "You are a security-focused reviewer. Prioritize auth and input validation; ignore style."
+max    = 8
+```
+
 ### Backends — where the findings go
 
 sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a

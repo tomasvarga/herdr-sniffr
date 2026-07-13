@@ -7,6 +7,19 @@
 # Built-in backends: "tuicr" (default) and "hunk".
 backend = "tuicr"
 
+# --- Review tuning ----------------------------------------------------------
+# `prompt` customizes WHAT the agent looks for. sniffr always appends the
+# machine-readable output contract itself, so DON'T describe the JSON format
+# here — just the review focus/persona. Omit to use the built-in default
+# ("senior code reviewer … high-signal findings only, no nits").
+#
+# prompt = """
+# You are a security-focused reviewer. Prioritize auth, input validation, and
+# secrets. Flag perf regressions. Ignore style and formatting entirely.
+# """
+#
+# max = 8   # cap on findings per review (SNIFFR_MAX env overrides)
+
 # --- Custom backends --------------------------------------------------------
 # Define your own review tool as a backend. sniffr resolves the agent's findings
 # (a JSON array of {file, line, type, body}, line-anchored by content), then:

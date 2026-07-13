@@ -124,13 +124,21 @@ resolve(){
 # ===================== WORKER: review, inject, reload (bg) =====================
 if [ "${1:-}" = "--worker" ]; then
   target="$2"; pid="$3"; backend="${4:-tuicr}"
-  AGENT="$(default_agent)"; MAX="${SNIFFR_MAX:-8}"
+  AGENT="$(default_agent)"
+  # max findings: SNIFFR_MAX env → config `max` → 8
+  MAX="${SNIFFR_MAX:-$(cfg_json | jq -r '.max // 8')}"
   resolve "$target"
   diff=$(gh pr diff "${num}" --repo "$repo" 2>/dev/null) || exit 0
   [ -n "$diff" ] || exit 0
-  prompt="You are a senior code reviewer. Review this pull-request unified diff.
+  # review INSTRUCTIONS are configurable (config `prompt`, else the default);
+  # the OUTPUT CONTRACT below is fixed — the resolver depends on this exact JSON
+  # shape and the verbatim `code` quote, so it is NOT user-editable.
+  instructions="$(cfg_json | jq -r '.prompt // empty')"
+  [ -n "$instructions" ] || instructions="You are a senior code reviewer. Review this pull-request unified diff.
 Report ONLY high-signal findings: bugs, security issues, correctness risks, and
-important design concerns. No nits, no style preferences.
+important design concerns. No nits, no style preferences."
+  prompt="${instructions}
+
 Output ONLY a JSON array — no prose, no markdown fences. Each item:
 {\"file\":\"<path on the new side>\",\"code\":\"<the ONE line this finding is about, copied VERBATIM from a '+' or context line in the diff, WITHOUT the leading +/space>\",\"line\":<new-side line number if you are certain, else null>,\"type\":\"bug|risk|question|note\",\"body\":\"<concise finding>\"}
 The \"code\" field is what locates the line — copy it character-for-character from
