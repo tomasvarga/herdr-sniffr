@@ -33,4 +33,5 @@ echo "sniffr: linked $BIN/sniffr → $ROOT/bin/sniffr"
 
 case ":$PATH:" in *":$BIN:"*) ;; *) echo "  note: add $BIN to your PATH" ;; esac
 echo "  needs: herdr + a backend (tuicr or hunk), plus gh, jq, python3, and an agent CLI."
-echo "  next: run 'sniffr doctor' to check your setup."
+echo "  next: 'sniffr doctor' to check your setup — or 'sniffr setup | pbcopy' and"
+echo "        paste into your coding agent to have it finish setup for you."

@@ -1,5 +1,7 @@
 # sniffr
 
+<img src="assets/icon.png" width="88" align="right" alt="sniffr">
+
 An AI **sniffs your PR for issues before you review it**. Point `sniffr` at a
 GitHub pull request: it opens the PR in your terminal reviewer —
 **[tuicr](https://tuicr.dev)** by default, **[hunk](https://hunk.dev)**, or
@@ -47,6 +49,41 @@ git clone https://github.com/tomasvarga/sniffr && ./sniffr/install.sh
 ```
 
 Then `sniffr doctor` to check your setup.
+
+### Or let your coding agent set it up
+
+`sniffr setup` prints a ready-to-paste prompt (`sniffr setup | pbcopy`). Drop it
+into Claude Code / Codex / Cursor and it installs sniffr, resolves deps, picks a
+backend + agent, and verifies — asking you only when there's a real choice:
+
+<details>
+<summary>Copy-paste setup prompt</summary>
+
+```
+Set up sniffr on my machine — a CLI that, pointed at a GitHub PR, opens it in my
+terminal reviewer and has an AI agent drop local-draft review comments on the
+risky lines before I read them. Work through this, asking me only when there's a
+real choice; show me any install command before running it. sniffr never posts
+to GitHub (comments are local drafts), so don't push code or post to a PR.
+
+1. If `sniffr` isn't installed, run:
+   curl -fsSL https://raw.githubusercontent.com/tomasvarga/sniffr/main/install.sh | bash
+   and make sure ~/.local/bin is on my PATH.
+2. Run `sniffr doctor` and fix each ✗: install missing core deps (gh, jq,
+   python3, herdr from herdr.dev); if gh isn't authenticated tell me to run
+   `gh auth login` myself; note that sniffr must run from inside a herdr pane.
+3. Backend (where comments land): sniffr auto-detects tuicr → hunk. If neither
+   is installed, ask which I prefer and install it (tuicr: tuicr.dev; hunk:
+   `brew install modem-dev/tap/hunk`). For a non-default choice write
+   `backend = "hunk"` to ~/.config/sniffr/config.toml.
+4. Agent: detect which of codex/claude/cursor-agent/grok/opencode/ollama is
+   installed + authenticated, then `sniffr --set-agent <name>`. If none, tell me
+   which to install.
+5. Verify with `sniffr doctor` (all ✓), then run `sniffr <a real PR of mine>`
+   from a herdr pane and confirm draft comments appear. Remind me they're local
+   drafts I prune (dd) and submit myself.
+```
+</details>
 
 ## Usage
 

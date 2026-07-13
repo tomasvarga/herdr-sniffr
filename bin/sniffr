@@ -9,6 +9,7 @@
 #   sniffr <pr> --backend hunk   deliver findings to hunk instead of tuicr
 #   sniffr queue [--since 3w]    pick from the PRs awaiting your review
 #   sniffr doctor                check deps, herdr, gh auth, agent, backend
+#   sniffr setup                 print an agent setup prompt (pipe to your agent)
 #
 # Comments are LOCAL DRAFTS only — sniffr NEVER posts to GitHub. You prune them
 # (dd / :clearc in tuicr) and submit yourself.
@@ -355,6 +356,18 @@ if [ "${1:-}" = "--bg" ]; then
   exit 0
 fi
 
+# ===================== setup: print the agent setup prompt ====================
+# `sniffr setup | pbcopy` (or just read it) → paste into a coding agent and it
+# walks the install/config for you.
+if [ "${1:-}" = "setup" ]; then
+  src="${BASH_SOURCE[0]:-$0}"
+  while [ -L "$src" ]; do t="$(readlink "$src")"; case "$t" in /*) src="$t" ;; *) src="$(dirname "$src")/$t" ;; esac; done
+  root="$(cd "$(dirname "$src")/.." 2>/dev/null && pwd)"
+  if [ -f "$root/SETUP_PROMPT.md" ]; then cat "$root/SETUP_PROMPT.md"
+  else echo "sniffr: SETUP_PROMPT.md not found (looked in $root) — see https://github.com/tomasvarga/sniffr" >&2; exit 1; fi
+  exit 0
+fi
+
 # ============================ doctor: preflight check =========================
 if [ "${1:-}" = "doctor" ]; then
   ok(){ printf '  \033[32m✓\033[0m %s\n' "$1"; }
@@ -492,7 +505,7 @@ while [ $# -gt 0 ]; do
       mkdir -p "$CONF_DIR"; printf '%s\n' "$a" > "$CONF_DIR/agent"
       echo "sniffr: default agent set to '$a' (~/.config/sniffr/agent)"; exit 0 ;;
     --show-agent) echo "sniffr: default agent = $(default_agent)"; exit 0 ;;
-    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     -*) die "unknown flag: $1" ;;
     *) target="$1"; shift ;;
   esac
