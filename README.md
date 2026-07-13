@@ -36,32 +36,14 @@ sniffr <pr>
   → a notification fires when they land
 ```
 
-## Install
+## Quick setup (recommended)
 
-One-liner (clones to `~/.local/share/sniffr`, symlinks `sniffr` into `~/.local/bin`):
+Paste this into any coding agent with shell access (Claude Code, Codex, Cursor,
+…). It installs sniffr, resolves deps, picks a backend + agent, and verifies —
+asking you only when there's a real choice. (Same as `sniffr setup` once
+installed; also in [`SETUP_PROMPT.md`](SETUP_PROMPT.md).)
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
-```
-
-Re-run it any time to update (it `git pull`s the clone). Or from a local checkout:
-
-```bash
-git clone https://github.com/tomasvarga/herdr-sniffr && ./herdr-sniffr/install.sh
-```
-
-Then `sniffr doctor` to check your setup.
-
-### Or let your coding agent set it up
-
-`sniffr setup` prints a ready-to-paste prompt (`sniffr setup | pbcopy`). Drop it
-into Claude Code / Codex / Cursor and it installs sniffr, resolves deps, picks a
-backend + agent, and verifies — asking you only when there's a real choice:
-
-<details>
-<summary>Copy-paste setup prompt</summary>
-
-```
+```text
 Set up sniffr on my machine — a CLI that, pointed at a GitHub PR, opens it in my
 terminal reviewer and has an AI agent drop local-draft review comments on the
 risky lines before I read them. Work through this, asking me only when there's a
@@ -85,7 +67,22 @@ to GitHub (comments are local drafts), so don't push code or post to a PR.
    from a herdr pane and confirm draft comments appear. Remind me they're local
    drafts I prune (dd) and submit myself.
 ```
-</details>
+
+## Install (manual)
+
+One-liner (clones to `~/.local/share/sniffr`, symlinks `sniffr` into `~/.local/bin`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
+```
+
+Re-run it any time to update (it `git pull`s the clone). Or from a local checkout:
+
+```bash
+git clone https://github.com/tomasvarga/herdr-sniffr && ./herdr-sniffr/install.sh
+```
+
+Then `sniffr doctor` to check your setup.
 
 ## Usage
 
