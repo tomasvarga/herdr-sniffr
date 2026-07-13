@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Sniff the GitHub PR URL currently on the clipboard. Bound to the
+# sniffr.sniff-clipboard herdr action; also fine to run directly.
+set -euo pipefail
+clip=""
+if   command -v pbpaste  >/dev/null 2>&1; then clip="$(pbpaste 2>/dev/null || true)"
+elif command -v wl-paste >/dev/null 2>&1; then clip="$(wl-paste 2>/dev/null || true)"
+elif command -v xclip    >/dev/null 2>&1; then clip="$(xclip -o -selection clipboard 2>/dev/null || true)"
+else echo "sniffr: no clipboard tool (pbpaste/wl-paste/xclip)" >&2; exit 1; fi
+clip="$(printf '%s' "$clip" | tr -d '[:space:]')"
+case "$clip" in
+  https://github.com/*/pull/[0-9]*) exec sniffr "$clip" ;;
+  *) echo "sniffr: clipboard isn't a GitHub PR URL: '${clip:0:60}'" >&2; exit 1 ;;
+esac

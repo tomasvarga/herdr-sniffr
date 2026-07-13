@@ -8,10 +8,13 @@ REPO="${SNIFFR_REPO:-https://github.com/tomasvarga/sniffr.git}"
 DEST="${SNIFFR_HOME:-$HOME/.local/share/sniffr}"   # where a curl install clones to
 BIN="${SNIFFR_BIN:-$HOME/.local/bin}"
 
-# Running from a local clone, or piped from curl (no file on disk)?
-SELF="${BASH_SOURCE[0]:-$0}"
-ROOT=""
-[ -f "$SELF" ] && ROOT="$(cd "$(dirname "$SELF")" && pwd)"
+# Running as a herdr plugin build hook? Use the plugin root. Otherwise: from a
+# local clone (this file's dir), or piped from curl (no file on disk).
+ROOT="${HERDR_PLUGIN_ROOT:-}"
+if [ -z "$ROOT" ]; then
+  SELF="${BASH_SOURCE[0]:-$0}"
+  [ -f "$SELF" ] && ROOT="$(cd "$(dirname "$SELF")" && pwd)"
+fi
 
 if [ -z "$ROOT" ] || [ ! -f "$ROOT/bin/sniffr" ]; then
   command -v git >/dev/null || { echo "sniffr: git is required for a remote install" >&2; exit 1; }
@@ -26,7 +29,7 @@ if [ -z "$ROOT" ] || [ ! -f "$ROOT/bin/sniffr" ]; then
   ROOT="$DEST"
 fi
 
-chmod +x "$ROOT/bin/sniffr"
+chmod +x "$ROOT/bin/sniffr" "$ROOT/bin/sniffr-clip" 2>/dev/null || true
 mkdir -p "$BIN"
 ln -sfn "$ROOT/bin/sniffr" "$BIN/sniffr"
 echo "sniffr: linked $BIN/sniffr → $ROOT/bin/sniffr"
