@@ -1,6 +1,8 @@
-# sniffr
+# herdr-sniffr
 
-<img src="assets/icon.png" width="88" align="right" alt="sniffr">
+<img src="assets/icon.png" width="88" align="right" alt="herdr-sniffr">
+
+> The command is **`sniffr`**; the plugin/repo is **herdr-sniffr**.
 
 An AI **sniffs your PR for issues before you review it**. Point `sniffr` at a
 GitHub pull request: it opens the PR in your terminal reviewer —
