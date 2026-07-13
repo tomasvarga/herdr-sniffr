@@ -116,11 +116,12 @@ max    = 8
 ### Backends — where the findings go
 
 sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a
-**backend** decides how they're presented. Selection (first match wins):
+**backend** decides how they're presented. sniffr has native support for two
+reviewers — **tuicr** and **hunk** (both separate tools you install) — and
+anything else plugs in as a **custom** backend. Selection (first match wins):
 `--backend` flag · `SNIFFR_BACKEND` env · `backend =` in
-`~/.config/sniffr/config.toml` · else sniffr **auto-detects** an installed
-built-in (tuicr, then hunk). So with nothing configured it uses whichever
-reviewer you already have.
+`~/.config/sniffr/config.toml` · else sniffr **auto-detects** whichever
+supported reviewer is installed (tuicr, then hunk).
 
 **Choosing a backend:**
 
@@ -131,10 +132,10 @@ reviewer you already have.
 | Your own reviewer | add a `[backends.<name>]` block (below) |
 | Not sure what you have | `sniffr doctor` — shows the resolved backend + how to fix a missing one |
 
-- **`tuicr`** (built-in, default) — opens `tuicr pr`, injects local-draft
-  comments into the live session, reloads.
-- **`hunk`** ([hunk.dev](https://hunk.dev), built-in) — opens `hunk patch`,
-  injects into the live hunk session via its comment API. Same async model.
+- **`tuicr`** (default) — [tuicr.dev](https://tuicr.dev); sniffr opens `tuicr pr`,
+  injects local-draft comments into the live session, reloads.
+- **`hunk`** — [hunk.dev](https://hunk.dev); sniffr opens `hunk patch` and injects
+  into the live hunk session via its comment API. Same async model as tuicr.
 - **custom** — define your own reviewer in `config.toml`. sniffr resolves the
   findings, then runs your `open` command (launch the viewer in a split) and
   pipes the findings JSON to your `inject` command:

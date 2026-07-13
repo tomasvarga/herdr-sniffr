@@ -20,8 +20,8 @@
 # Built-ins: codex · claude · cursor · grok · opencode · ollama.
 #
 # Backend (where findings go): --backend flag · SNIFFR_BACKEND env · config
-# `backend=` in ~/.config/sniffr/config.toml · tuicr. Built-in: tuicr, hunk.
-# Define custom backends under [backends.<name>] (open/inject commands).
+# `backend=` in ~/.config/sniffr/config.toml · tuicr. Native support: tuicr,
+# hunk (external tools you install). Anything else → a custom [backends.<name>].
 set -uo pipefail
 die(){ echo "sniffr: $*" >&2; exit 1; }
 
@@ -34,18 +34,18 @@ cfg_json(){
   python3 -c 'import tomllib,json,sys; print(json.dumps(tomllib.load(open(sys.argv[1],"rb"))))' "$CONFIG_FILE" 2>/dev/null || echo '{}'
 }
 # backend precedence: --backend flag (BACKEND_OPT) → SNIFFR_BACKEND → config →
-# auto-detect an installed built-in (tuicr, then hunk) → tuicr.
+# auto-detect an installed native backend (tuicr, then hunk) → tuicr.
 resolve_backend(){
   if [ -n "${BACKEND_OPT:-}" ]; then printf '%s' "$BACKEND_OPT"; return; fi
   if [ -n "${SNIFFR_BACKEND:-}" ]; then printf '%s' "$SNIFFR_BACKEND"; return; fi
   local cb; cb=$(cfg_json | jq -r '.backend // empty')
   if [ -n "$cb" ]; then printf '%s' "$cb"; return; fi
-  # nothing explicit → use whichever built-in reviewer is actually installed
+  # nothing explicit → use whichever supported reviewer is actually installed
   if   command -v tuicr >/dev/null 2>&1; then printf 'tuicr'
   elif command -v hunk  >/dev/null 2>&1; then printf 'hunk'
   else printf 'tuicr'; fi
 }
-# helpful message when a built-in backend's binary is missing — point at an
+# helpful message when a native backend's binary is missing — point at an
 # installed alternative if there is one, else at how to get set up.
 backend_missing_hint(){
   local b="$1" alt=""
@@ -54,12 +54,12 @@ backend_missing_hint(){
   if [ -n "$alt" ]; then
     printf "backend '%s' needs the '%s' binary, which isn't installed — but you have '%s'. Use --backend %s, or set backend = \"%s\" in %s." "$b" "$b" "$alt" "$alt" "$alt" "$CONFIG_FILE"
   else
-    printf "backend '%s' needs the '%s' binary installed, and no other built-in reviewer is available. Install tuicr (tuicr.dev) or hunk (hunk.dev), or define a custom backend in %s." "$b" "$b" "$CONFIG_FILE"
+    printf "backend '%s' needs the '%s' binary installed, and no other supported reviewer is available. Install tuicr (tuicr.dev) or hunk (hunk.dev), or define a custom backend in %s." "$b" "$b" "$CONFIG_FILE"
   fi
 }
 # read a custom backend's command: cfg_backend_cmd <name> <open|inject>
 cfg_backend_cmd(){ cfg_json | jq -r --arg n "$1" --arg f "$2" '.backends[$n][$f] // empty'; }
-# is $1 a known backend (built-in or defined in config)?
+# is $1 a known backend (native or defined in config)?
 backend_known(){
   case "$1" in tuicr|hunk) return 0 ;; esac
   [ -n "$(cfg_json | jq -r --arg n "$1" '.backends[$n] // empty')" ]
@@ -392,10 +392,10 @@ if [ "${1:-}" = "doctor" ]; then
   echo "backend:"
   BK="$(resolve_backend)"
   case "$BK" in
-    tuicr) command -v tuicr >/dev/null && ok "tuicr (built-in)" || no "$(backend_missing_hint tuicr)" ;;
-    hunk)  command -v hunk  >/dev/null && ok "hunk (built-in)"  || no "$(backend_missing_hint hunk)" ;;
+    tuicr) command -v tuicr >/dev/null && ok "tuicr (native, default)" || no "$(backend_missing_hint tuicr)" ;;
+    hunk)  command -v hunk  >/dev/null && ok "hunk (native)"  || no "$(backend_missing_hint hunk)" ;;
     *)     if [ -n "$(cfg_backend_cmd "$BK" inject)" ]; then ok "custom backend '$BK' (inject: $(cfg_backend_cmd "$BK" inject))"
-           else no "backend '$BK' is neither built-in nor defined in $CONFIG_FILE"; fi ;;
+           else no "backend '$BK' is neither a native backend nor defined in $CONFIG_FILE"; fi ;;
   esac
   echo "notifications:"
   if   command -v terminal-notifier >/dev/null; then ok "terminal-notifier (full-text OS notifications)"
@@ -512,7 +512,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$target" ] || die "usage: sniffr <pr> [--agent NAME] [--backend tuicr|hunk|<custom>]"
 backend="$(resolve_backend)"
-backend_known "$backend" || die "unknown backend '$backend'. Built-in: tuicr, hunk. Define custom backends under [backends.$backend] in $CONFIG_FILE."
+backend_known "$backend" || die "unknown backend '$backend'. Native: tuicr, hunk. Define custom backends under [backends.$backend] in $CONFIG_FILE."
 for b in gh jq python3 herdr; do command -v "$b" >/dev/null || die "missing dependency: $b"; done
 case "$backend" in
   tuicr) command -v tuicr >/dev/null || die "$(backend_missing_hint tuicr)" ;;
