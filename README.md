@@ -93,8 +93,9 @@ Linux (`sniffr doctor` verifies all of the above).
 
 - **herdr + tuicr required** (v0.1) — sniffr opens tuicr in a herdr split and
   reloads it. (A herdr-optional mode is a possible future direction.)
-- **Line anchoring** relies on the agent reading the diff's `@@` hunks — a comment
-  can land a few lines off; findings with no line become file-level comments.
+- **Line anchoring** is by content: the agent quotes the exact line, and sniffr
+  parses the diff to resolve the real new-side line number (the agent's own count
+  is only a tiebreaker). A quote that can't be matched becomes a file-level comment.
 - Comments are **local drafts** — never pushed until you submit them in tuicr.
 
 ## License

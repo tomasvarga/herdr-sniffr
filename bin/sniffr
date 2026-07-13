@@ -86,13 +86,15 @@ if [ "${1:-}" = "--worker" ]; then
 Report ONLY high-signal findings: bugs, security issues, correctness risks, and
 important design concerns. No nits, no style preferences.
 Output ONLY a JSON array — no prose, no markdown fences. Each item:
-{\"file\":\"<path, new side>\",\"line\":<new-side line number, or null>,\"type\":\"bug|risk|question|note\",\"body\":\"<concise finding>\"}
-Use the @@ hunk headers to compute new-side line numbers. At most ${MAX} items.
+{\"file\":\"<path on the new side>\",\"code\":\"<the ONE line this finding is about, copied VERBATIM from a '+' or context line in the diff, WITHOUT the leading +/space>\",\"line\":<new-side line number if you are certain, else null>,\"type\":\"bug|risk|question|note\",\"body\":\"<concise finding>\"}
+The \"code\" field is what locates the line — copy it character-for-character from
+the diff; do NOT paraphrase, reindent, or reformat it. At most ${MAX} items.
 If nothing significant, output [].
 
 DIFF:
 ${diff}"
   scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
+  printf '%s' "$diff" > "$scratch/diff.patch"
   run_agent(){
     if [ -n "${SNIFFR_CMD:-}" ]; then printf '%s' "$prompt" | ( cd "$scratch" && eval "$SNIFFR_CMD" ); return; fi
     ( cd "$scratch"
@@ -106,17 +108,117 @@ ${diff}"
       esac )
   }
   raw=$(run_agent)
-  findings=$(printf '%s' "$raw" | python3 -c '
-import sys, json
-s = sys.stdin.read(); i = s.find("[")
-while i != -1:
-    for j in range(len(s), i, -1):
-        try:
-            v = json.loads(s[i:j])
-            if isinstance(v, list): print(json.dumps(v)); sys.exit(0)
-        except Exception: pass
-    i = s.find("[", i + 1)
-print("[]")')
+  # Extract the agent's JSON array, then ANCHOR each finding to a real line by
+  # matching its verbatim `code` quote against the diff's new-side lines. The
+  # agent's counted `line` is only a fallback/tiebreaker — quotes don't drift.
+  findings=$(printf '%s' "$raw" | python3 - "$scratch/diff.patch" <<'PY'
+import sys, json, re, os
+
+diff_path = sys.argv[1]
+raw = sys.stdin.read()
+
+def extract_array(s):
+    i = s.find("[")
+    while i != -1:
+        for j in range(len(s), i, -1):
+            try:
+                v = json.loads(s[i:j])
+                if isinstance(v, list):
+                    return v
+            except Exception:
+                pass
+        i = s.find("[", i + 1)
+    return []
+
+findings = extract_array(raw)
+
+# Parse the unified diff -> {path: [(new_line_no, text), ...]} for new-side lines
+try:
+    with open(diff_path, errors="replace") as f:
+        diff = f.read()
+except Exception:
+    diff = ""
+
+files, cur, newno = {}, None, None
+hunk_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+for ln in diff.split("\n"):
+    if ln.startswith("+++ "):
+        p = ln[4:].strip().split("\t", 1)[0]
+        if p.startswith("b/"):
+            p = p[2:]
+        cur = None if p == "/dev/null" else p
+        if cur is not None:
+            files.setdefault(cur, [])
+        newno = None
+    elif ln.startswith("--- "):
+        continue
+    else:
+        m = hunk_re.match(ln)
+        if m:
+            newno = int(m.group(1))
+        elif cur is None or newno is None:
+            continue
+        elif ln.startswith("+"):
+            files[cur].append((newno, ln[1:])); newno += 1
+        elif ln.startswith("-") or ln.startswith("\\"):
+            pass
+        else:
+            files[cur].append((newno, ln[1:] if ln.startswith(" ") else ln)); newno += 1
+
+def match_file(fpath):
+    if not fpath:
+        return None
+    if fpath in files:
+        return fpath
+    for k in files:                       # suffix match (agent may give partial path)
+        if k.endswith(fpath) or fpath.endswith(k):
+            return k
+    base = os.path.basename(fpath)
+    cands = [k for k in files if os.path.basename(k) == base]
+    return cands[0] if len(cands) == 1 else None
+
+def resolve_line(fkey, code, hint):
+    lines = files.get(fkey or "", [])
+    if not lines:
+        return None
+    c = (code or "").strip()
+    if c:
+        exact = [no for no, t in lines if t.strip() == c]
+        if len(exact) == 1:
+            return exact[0]
+        if len(exact) > 1:
+            return min(exact, key=lambda no: abs(no - hint)) if isinstance(hint, int) else exact[0]
+        sub = [no for no, t in lines if t.strip() and (c in t.strip() or t.strip() in c)]
+        if len(sub) == 1:
+            return sub[0]
+        if len(sub) > 1 and isinstance(hint, int):
+            return min(sub, key=lambda no: abs(no - hint))
+    if isinstance(hint, int):             # fall back to the counted line if plausible
+        nos = [no for no, _ in lines]
+        if nos and min(nos) <= hint <= max(nos):
+            return hint
+    return None
+
+out = []
+for it in findings:
+    if not isinstance(it, dict):
+        continue
+    body = (it.get("body") or "").strip()
+    fpath = (it.get("file") or "").strip()
+    if not body or not fpath:
+        continue
+    hint = it.get("line") if isinstance(it.get("line"), int) else None
+    fkey = match_file(fpath)
+    out.append({
+        "file": fkey or fpath,
+        "line": resolve_line(fkey, it.get("code"), hint),
+        "type": it.get("type") or "note",
+        "body": body,
+    })
+
+print(json.dumps(out))
+PY
+)
   # wait for tuicr to open the PR and persist the session to disk
   found=0
   for _ in $(seq 1 45); do
