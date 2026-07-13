@@ -2,8 +2,6 @@
 
 <img src="assets/icon.png" width="88" align="right" alt="herdr-sniffr">
 
-> The command is **`sniffr`**; the plugin/repo is **herdr-sniffr**.
-
 An AI **sniffs your PR for issues before you review it**. Point `sniffr` at a
 GitHub pull request: it opens the PR in your terminal reviewer —
 **[tuicr](https://tuicr.dev)** by default, **[hunk](https://hunk.dev)**, or
@@ -11,6 +9,8 @@ your own tool — then an AI agent reviews the diff **in the background** and dr
 its findings in as draft comments, so by the time you start reading, the risky
 lines are already flagged. Agent-agnostic (Codex, Claude, Cursor, Grok,
 opencode, ollama) and backend-agnostic (tuicr · hunk · custom).
+
+> The command is **`sniffr`**; the plugin/repo is **herdr-sniffr**.
 
 ![sniffr in action](assets/demo.gif)
 
