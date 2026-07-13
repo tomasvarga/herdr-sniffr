@@ -33,10 +33,19 @@ sniffr <pr>
 
 ## Install
 
+One-liner (clones to `~/.local/share/sniffr`, symlinks `sniffr` into `~/.local/bin`):
+
 ```bash
-git clone https://github.com/tomasvarga/sniffr ~/Documents/GitHub/sniffr
-~/Documents/GitHub/sniffr/install.sh     # symlinks bin/sniffr into ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/tomasvarga/sniffr/main/install.sh | bash
 ```
+
+Re-run it any time to update (it `git pull`s the clone). Or from a local checkout:
+
+```bash
+git clone https://github.com/tomasvarga/sniffr && ./sniffr/install.sh
+```
+
+Then `sniffr doctor` to check your setup.
 
 ## Usage
 
