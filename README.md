@@ -1,22 +1,22 @@
 # sniffr
 
 An AI **sniffs your PR for issues before you review it**. Point `sniffr` at a
-GitHub pull request: it opens the PR in [tuicr](https://tuicr.dev), then an AI
-agent reviews the diff **in the background** and drops its findings in as draft
-review comments — so by the time you start reading, the risky lines are already
-flagged. Agent-agnostic (Codex, Claude, Cursor, Grok, opencode, ollama).
+GitHub pull request: it opens the PR in your terminal reviewer —
+**[tuicr](https://tuicr.dev)** by default, **[hunk](https://hunk.dev)**, or
+your own tool — then an AI agent reviews the diff **in the background** and drops
+its findings in as draft comments, so by the time you start reading, the risky
+lines are already flagged. Agent-agnostic (Codex, Claude, Cursor, Grok,
+opencode, ollama) and backend-agnostic (tuicr · hunk · custom).
 
 ![sniffr in action](assets/demo.gif)
 
 Part of a terminal PR-review workflow on [herdr](https://herdr.dev); pairs with
 [herdr-pickr](https://github.com/tomasvarga/herdr-pickr) (add it as a `[[backend]]`).
 
-> **sniffr never posts to GitHub.** Every comment is a tuicr **local draft** on
-> your machine — you read them, prune the noise (`dd` / `:clearc`), and submit
-> what's left yourself. The AI's pass is private scaffolding for *you*, never
-> something the PR author sees unless you choose to send it.
-
-> Status: early (v0.1). macOS + GitHub tested; Linux date handling supported.
+> **sniffr never posts to GitHub.** Every comment is a **local draft** on your
+> machine — you read them, prune the noise, and submit what's left yourself. The
+> AI's pass is private scaffolding for *you*, never something the PR author sees
+> unless you choose to send it.
 
 Run `sniffr doctor` first — it checks deps, herdr, `gh` auth, your agent, and
 notifications, and tells you exactly what's missing.
@@ -25,10 +25,11 @@ notifications, and tells you exactly what's missing.
 
 ```
 sniffr <pr>
-  → tuicr opens the PR (in a herdr split) — you start reading immediately
+  → your reviewer opens the PR in a herdr split — you start reading immediately
+    (tuicr by default; hunk or a custom backend — see "Backends")
   → a detached worker runs your agent over the diff
-  → findings injected as tuicr LOCAL-DRAFT comments (never pushed)
-  → the pane reloads; a notification fires when done
+  → findings injected as LOCAL-DRAFT comments, anchored to the right lines (never pushed)
+  → a notification fires when they land
 ```
 
 ## Install
