@@ -158,7 +158,7 @@ ${diff}"
         codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check - 2>/dev/null ;;
         claude)              printf '%s' "$prompt" | claude -p 2>/dev/null ;;
         cursor|cursor-agent) cursor-agent -p --output-format text "$prompt" 2>/dev/null ;;
-        grok)                grok --output-format text "$prompt" 2>/dev/null ;;
+        grok)                grok --output-format plain "$prompt" 2>/dev/null ;;
         opencode)            opencode run "$prompt" 2>/dev/null ;;
         ollama)              printf '%s' "$prompt" | ollama run "${SNIFFR_MODEL:-llama3.1}" 2>/dev/null ;;
       esac )
