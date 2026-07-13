@@ -17,7 +17,7 @@
 # Agent (first match wins): --agent flag · SNIFFR_AGENT env · saved default
 # (`sniffr --set-agent <name>`, stored in ~/.config/sniffr/agent) · codex.
 # SNIFFR_CMD='<cmd>' escape hatch (prompt on stdin -> JSON array on stdout).
-# Built-ins: codex · claude · cursor · grok · opencode · ollama.
+# Built-ins: codex · claude · cursor-agent · grok · opencode · ollama.
 #
 # Backend (where findings go): --backend flag · SNIFFR_BACKEND env · config
 # `backend=` in ~/.config/sniffr/config.toml · tuicr. Native support: tuicr,
@@ -74,8 +74,8 @@ default_agent(){
   else printf 'codex'; fi
 }
 
-# map an agent name to the binary it invokes (cursor → cursor-agent)
-agent_bin(){ case "$1" in cursor|cursor-agent) echo cursor-agent ;; *) echo "$1" ;; esac; }
+# agent name == the binary it invokes
+agent_bin(){ printf '%s' "$1"; }
 
 # date_ago 21d|3w|2mo|1y -> YYYY-MM-DD, portable across BSD (macOS) and GNU (Linux)
 date_ago(){
@@ -157,7 +157,7 @@ ${diff}"
       case "$AGENT" in
         codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check - 2>/dev/null ;;
         claude)              printf '%s' "$prompt" | claude -p 2>/dev/null ;;
-        cursor|cursor-agent) cursor-agent -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} --output-format text "$prompt" 2>/dev/null ;;
+        cursor-agent)        cursor-agent -f -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} --output-format text "$prompt" 2>/dev/null ;;
         grok)                grok -p "$prompt" 2>/dev/null ;;
         opencode)            opencode run ${SNIFFR_MODEL:+-m "$SNIFFR_MODEL"} "$prompt" 2>/dev/null ;;
         ollama)              printf '%s' "$prompt" | ollama run "${SNIFFR_MODEL:-llama3.1}" 2>/dev/null ;;
@@ -500,7 +500,7 @@ while [ $# -gt 0 ]; do
     --backend) BACKEND_OPT="${2:-}"; shift 2 ;;
     --backend=*) BACKEND_OPT="${1#*=}"; shift ;;
     --set-agent) a="${2:-}"; [ -n "$a" ] || die "usage: sniffr --set-agent <name>"
-      case "$a" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) ;;
+      case "$a" in codex|claude|cursor-agent|grok|opencode|ollama) ;;
         *) echo "sniffr: note — '$a' isn't a built-in; set SNIFFR_CMD for a custom tool" >&2 ;; esac
       mkdir -p "$CONF_DIR"; printf '%s\n' "$a" > "$CONF_DIR/agent"
       echo "sniffr: default agent set to '$a' (~/.config/sniffr/agent)"; exit 0 ;;
@@ -519,8 +519,8 @@ case "$backend" in
   hunk)  command -v hunk  >/dev/null || die "$(backend_missing_hint hunk)" ;;
 esac
 if [ -z "${SNIFFR_CMD:-}" ]; then
-  case "$AGENT" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
-    *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
+  case "$AGENT" in codex|claude|cursor-agent|grok|opencode|ollama) : ;;
+    *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor-agent grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
   ab=$(agent_bin "$AGENT")
   command -v "$ab" >/dev/null || die "agent '$AGENT' selected but '$ab' isn't installed or on PATH — install it, pick another with --agent, set SNIFFR_CMD='<cmd>', or run 'sniffr doctor'."
 fi

@@ -100,12 +100,12 @@ sniffr doctor               # preflight: deps, herdr, gh auth, agent, backend
 
 Pick the agent (first match wins): `--agent` flag · `SNIFFR_AGENT` env · saved
 default (`~/.config/sniffr/agent`) · `codex`. Built-ins: **codex · claude ·
-cursor · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command>'`
+cursor-agent · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command>'`
 (gets the review prompt on stdin, must print a JSON array of findings). Findings
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
 
-Pick the **model** with `SNIFFR_MODEL` for cursor / opencode / ollama — e.g.
+Pick the **model** with `SNIFFR_MODEL` for cursor-agent / opencode / ollama — e.g.
 `SNIFFR_MODEL=gpt-5.3-codex` (cursor; default is `auto`), `provider/model`
 (opencode), or a tag like `llama3.1` (ollama, which also needs `ollama serve`
 running and the model pulled). codex/claude use their own configured model.
@@ -200,7 +200,7 @@ sniffr queue --drafts       # add drafts back
 ## Requirements
 
 **herdr ≥ 0.7.0**, `gh` (authenticated), `jq`, `python3` (≥3.11 for config), and
-at least one **agent CLI** (codex/claude/cursor/grok/opencode/ollama) on your
+at least one **agent CLI** (codex/claude/cursor-agent/grok/opencode/ollama) on your
 `PATH`. Plus the binary for your backend: **tuicr** (default) or
 **[hunk](https://hunk.dev)**. Runs from inside a herdr pane. GitHub only for now.
 macOS and Linux (`sniffr doctor` verifies all of the above).
