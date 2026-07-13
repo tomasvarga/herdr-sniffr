@@ -1,51 +1,56 @@
 # Recording the sniffr demo GIF
 
-sniffr's whole point is the **async, multi-pane** moment — you run it, tuicr opens
-*immediately* in one herdr split, and the agent's comments land in that pane a few
-seconds later while you're already reading. That can't be captured with
-[VHS](https://github.com/charmbracelet/vhs): VHS records a single terminal, but
-this plays out across herdr panes, and every sniffr command needs a live herdr
-session. So this demo is a **real screen recording inside herdr**, not a tape.
+`assets/demo.gif` is recorded **automatically** with [VHS](https://github.com/charmbracelet/vhs):
+the tape starts a *fresh, isolated herdr session inside VHS's own terminal*, so
+sniffr's tuicr split renders in the same frame VHS captures. `assets/demo.tape`
+is the source.
 
-## Tooling
+## Prerequisites
 
-A GIF screen recorder — [Kap](https://getkap.co) or Gifox on macOS (or QuickTime
-screen capture → convert to GIF with `ffmpeg`/`gifski`). Record the **whole herdr
-window** so both panes (gh-dash/your shell + the tuicr split) are visible.
+- `vhs` and `ffmpeg` on `PATH`.
+- A demo PR with an obvious, reliably-flagged issue. This GIF uses a small
+  private repo, `tomasvarga/sniffr-demo#1` (a token-login handler with a
+  `== None` check and a SQL-injection string-concat) — swap in your own.
+- A working agent (the tape uses the default, `codex`).
 
-## Setup for a clean take
+## The one gotcha: strip `HERDR_*`
 
-- **A small PR with 1–3 genuine issues** so the findings are real and land fast.
-  A throwaway demo repo you control is ideal (you can also re-run freely).
-- **A fast agent** so the wait is short — `SNIFFR_AGENT=grok sniffr …` or codex.
-  ~20–30s is normal; you'll trim the wait in editing.
-- **Terminal size:** wide enough that the tuicr split isn't cramped (the diff +
-  a comment gutter). ~120×32 in the herdr window is a good target.
-- Start from a clean session so no stray panes are in frame.
+herdr refuses to start **nested** (it detects `HERDR_*` env vars and errors with
+"nested herdr is disabled"). Since you're recording from inside herdr, unset
+those vars for the `vhs` invocation so the herdr *inside VHS* starts clean:
 
-## Shot sequence (aim for < 30s final)
+```bash
+env -u HERDR_SOCKET_PATH -u HERDR_PANE_ID -u HERDR_SESSION \
+    -u HERDR_ENV -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_CONFIG_PATH \
+    vhs assets/demo.tape
+herdr session stop demo   # clean up the throwaway session afterwards
+```
 
-1. **Establish it's ready** — `sniffr doctor` → the green ✓ column. (~2s)
-2. **Fire it** — `sniffr <owner/repo#N>` (or `sniffr queue` → pick one). The
-   message prints and a tuicr split opens on the right **instantly**. (~2s)
-3. **Show you're already reading** — scroll the diff in the tuicr pane while the
-   agent works. This is the point: you don't wait. (~5–10s)
-4. **The payoff** — the notification fires, the pane reloads, and the agent's
-   comments appear inline, anchored to the right lines, stamped with the agent
-   name (distinct from your own). (~3s)
-5. *(optional)* `dd` on a comment to drop one / `:clearc` to clear — shows the
-   drafts are yours to prune and are never pushed. (~3s)
+The tape (`assets/demo.tape`): `cd ~` → `herdr --session demo` → type
+`sniffr <pr>` → sleep while codex works. tuicr opens instantly; the comment
+lands ~25–30s in when the agent finishes.
 
-## Editing
+## Post-process (trim the boot + dead tail, speed the wait)
 
-- **Cut the agent wait.** Speed up or hard-cut the gap between step 3 and 4 —
-  keep just enough to convey "kept reading, then they appeared."
-- Keep it loopable and captionless; the README text carries the explanation.
+The raw capture is ~55s (mostly the agent-wait). Trim to the interesting window
+and 2× it:
 
-## Wiring it in
+```bash
+ffmpeg -ss 8 -t 25 -i demo.gif \
+  -filter_complex "[0:v]setpts=0.5*PTS,fps=15,scale=1200:-1:flags=lanczos,\
+split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer" \
+  -y assets/demo.gif
+```
 
-Save the result as `assets/demo.gif`, then add near the top of `README.md`:
+Result: ~12s, ~160KB. Adjust `-ss`/`-t` to match where the comment appears in
+your capture (extract frames with `ffmpeg -i demo.gif -vf fps=1 f_%02d.png` to
+find it).
 
-```md
-![sniffr in action](assets/demo.gif)
+## Verifying (you can't see the recording live)
+
+Sample frames and inspect them — early (tuicr open, no comments yet) and late
+(comment landed, "Reloaded PR" in the status bar):
+
+```bash
+ffmpeg -i assets/demo.gif -vf fps=1 /tmp/f_%02d.png
 ```

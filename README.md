@@ -6,6 +6,8 @@ agent reviews the diff **in the background** and drops its findings in as draft
 review comments — so by the time you start reading, the risky lines are already
 flagged. Agent-agnostic (Codex, Claude, Cursor, Grok, opencode, ollama).
 
+![sniffr in action](assets/demo.gif)
+
 Part of a terminal PR-review workflow on [herdr](https://herdr.dev); pairs with
 [herdr-pickr](https://github.com/tomasvarga/herdr-pickr) (add it as a `[[backend]]`).
 
