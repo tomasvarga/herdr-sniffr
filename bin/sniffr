@@ -73,6 +73,7 @@ resolve(){
     *) die "unrecognized PR target: $1" ;;
   esac
   slug="gh:$repo/pr/${num}"
+  url="https://github.com/$repo/pull/${num}"
 }
 
 # ===================== WORKER: review, inject, reload (bg) =====================
@@ -259,6 +260,7 @@ if [ "${1:-}" = "--bg" ]; then
   SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" >"$log" 2>&1 </dev/null &
   disown 2>/dev/null || true
   notify "sniffr" "${AGENT} is sniffing PR #${num} in the background…"
+  echo "sniffr: $AGENT sniffing #${num} in the background — ${url}"
   exit 0
 fi
 
@@ -414,3 +416,4 @@ SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" >"$log" 2>&1 </dev/nu
 disown 2>/dev/null || true
 notify "sniffr" "$AGENT is sniffing PR #${num} in the background…"
 echo "sniffr: opened #${num} in tuicr — $AGENT sniffing in the background."
+echo "  ${url}"
