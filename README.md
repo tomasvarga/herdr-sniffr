@@ -39,13 +39,13 @@ sniffr <pr>
 One-liner (clones to `~/.local/share/sniffr`, symlinks `sniffr` into `~/.local/bin`):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tomasvarga/sniffr/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
 ```
 
 Re-run it any time to update (it `git pull`s the clone). Or from a local checkout:
 
 ```bash
-git clone https://github.com/tomasvarga/sniffr && ./sniffr/install.sh
+git clone https://github.com/tomasvarga/herdr-sniffr && ./herdr-sniffr/install.sh
 ```
 
 Then `sniffr doctor` to check your setup.
@@ -67,7 +67,7 @@ real choice; show me any install command before running it. sniffr never posts
 to GitHub (comments are local drafts), so don't push code or post to a PR.
 
 1. If `sniffr` isn't installed, run:
-   curl -fsSL https://raw.githubusercontent.com/tomasvarga/sniffr/main/install.sh | bash
+   curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
    and make sure ~/.local/bin is on my PATH.
 2. Run `sniffr doctor` and fix each ✗: install missing core deps (gh, jq,
    python3, herdr from herdr.dev); if gh isn't authenticated tell me to run

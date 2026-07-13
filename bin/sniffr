@@ -364,7 +364,7 @@ if [ "${1:-}" = "setup" ]; then
   while [ -L "$src" ]; do t="$(readlink "$src")"; case "$t" in /*) src="$t" ;; *) src="$(dirname "$src")/$t" ;; esac; done
   root="$(cd "$(dirname "$src")/.." 2>/dev/null && pwd)"
   if [ -f "$root/SETUP_PROMPT.md" ]; then cat "$root/SETUP_PROMPT.md"
-  else echo "sniffr: SETUP_PROMPT.md not found (looked in $root) — see https://github.com/tomasvarga/sniffr" >&2; exit 1; fi
+  else echo "sniffr: SETUP_PROMPT.md not found (looked in $root) — see https://github.com/tomasvarga/herdr-sniffr" >&2; exit 1; fi
   exit 0
 fi
 

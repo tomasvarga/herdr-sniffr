@@ -18,7 +18,7 @@ each command before running anything that installs software.
 Run `command -v sniffr`. If absent:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/tomasvarga/sniffr/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
 ```
 
 Confirm `~/.local/bin` is on my `PATH` (the installer warns if not).

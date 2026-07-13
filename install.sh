@@ -4,7 +4,7 @@
 #   • piped from curl:     curl … | bash         (clones, then symlinks)
 set -euo pipefail
 
-REPO="${SNIFFR_REPO:-https://github.com/tomasvarga/sniffr.git}"
+REPO="${SNIFFR_REPO:-https://github.com/tomasvarga/herdr-sniffr.git}"
 DEST="${SNIFFR_HOME:-$HOME/.local/share/sniffr}"   # where a curl install clones to
 BIN="${SNIFFR_BIN:-$HOME/.local/bin}"
 
