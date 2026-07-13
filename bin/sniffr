@@ -7,6 +7,7 @@
 #   sniffr <pr>                  pr = number | owner/repo#N | URL
 #   sniffr <pr> --agent grok
 #   sniffr <pr> --backend hunk   deliver findings to hunk instead of tuicr
+#   sniffr <pr> --model <name>   model for the agent (else its default/auto)
 #   sniffr queue [--since 3w]    pick from the PRs awaiting your review
 #   sniffr doctor                check deps, herdr, gh auth, agent, backend
 #   sniffr setup                 print an agent setup prompt (pipe to your agent)
@@ -74,8 +75,8 @@ default_agent(){
   else printf 'codex'; fi
 }
 
-# agent name == the binary it invokes
-agent_bin(){ printf '%s' "$1"; }
+# agent name → the binary it invokes (cursor is an alias for cursor-agent)
+agent_bin(){ case "$1" in cursor) echo cursor-agent ;; *) printf '%s' "$1" ;; esac; }
 
 # date_ago 21d|3w|2mo|1y -> YYYY-MM-DD, portable across BSD (macOS) and GNU (Linux)
 date_ago(){
@@ -128,6 +129,9 @@ if [ "${1:-}" = "--worker" ]; then
   AGENT="$(default_agent)"
   # max findings: SNIFFR_MAX env → config `max` → 8
   MAX="${SNIFFR_MAX:-$(cfg_json | jq -r '.max // 8')}"
+  # model: SNIFFR_MODEL env (set by --model flag or the caller) → config `model`
+  # → empty (each agent's own default). MAIN/--bg pass the resolved value here.
+  MODEL="${SNIFFR_MODEL:-$(cfg_json | jq -r '.model // empty')}"
   resolve "$target"
   diff=$(gh pr diff "${num}" --repo "$repo" 2>/dev/null) || exit 0
   [ -n "$diff" ] || exit 0
@@ -155,12 +159,12 @@ ${diff}"
     if [ -n "${SNIFFR_CMD:-}" ]; then printf '%s' "$prompt" | ( cd "$scratch" && eval "$SNIFFR_CMD" ); return; fi
     ( cd "$scratch"
       case "$AGENT" in
-        codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} - 2>/dev/null ;;
-        claude)              printf '%s' "$prompt" | claude -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} 2>/dev/null ;;
-        cursor-agent)        cursor-agent -f -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} --output-format text "$prompt" 2>/dev/null ;;
-        grok)                grok -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} "$prompt" 2>/dev/null ;;
-        opencode)            opencode run ${SNIFFR_MODEL:+-m "$SNIFFR_MODEL"} "$prompt" 2>/dev/null ;;
-        ollama)              printf '%s' "$prompt" | ollama run "${SNIFFR_MODEL:-llama3.1}" 2>/dev/null ;;
+        codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check ${MODEL:+--model "$MODEL"} - 2>/dev/null ;;
+        claude)              printf '%s' "$prompt" | claude -p ${MODEL:+--model "$MODEL"} 2>/dev/null ;;
+        cursor|cursor-agent) cursor-agent -f -p ${MODEL:+--model "$MODEL"} --output-format text "$prompt" 2>/dev/null ;;
+        grok)                grok -p ${MODEL:+--model "$MODEL"} "$prompt" 2>/dev/null ;;
+        opencode)            opencode run ${MODEL:+-m "$MODEL"} "$prompt" 2>/dev/null ;;
+        ollama)              printf '%s' "$prompt" | ollama run "${MODEL:-llama3.1}" 2>/dev/null ;;
       esac )
   }
   raw=$(run_agent)
@@ -349,7 +353,7 @@ if [ "${1:-}" = "--bg" ]; then
   AGENT="$(default_agent)"
   resolve "$target"
   log="${TMPDIR:-/tmp}/sniffr-${num}.log"
-  SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" "$backend" >"$log" 2>&1 </dev/null &
+  SNIFFR_AGENT="$AGENT" SNIFFR_MODEL="${MODEL_OPT:-${SNIFFR_MODEL:-}}" nohup "$0" --worker "$target" "$pid" "$backend" >"$log" 2>&1 </dev/null &
   disown 2>/dev/null || true
   notify "sniffr" "${AGENT} is sniffing PR #${num} in the background…"
   echo "sniffr: $AGENT sniffing #${num} in the background ($backend) — ${url}"
@@ -492,20 +496,22 @@ EOF
 fi
 
 # ========================= MAIN: open tuicr + spawn worker ====================
-AGENT="$(default_agent)"; target=""; BACKEND_OPT=""
+AGENT="$(default_agent)"; target=""; BACKEND_OPT=""; MODEL_OPT=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --agent) AGENT="${2:-}"; shift 2 ;;
     --agent=*) AGENT="${1#*=}"; shift ;;
     --backend) BACKEND_OPT="${2:-}"; shift 2 ;;
     --backend=*) BACKEND_OPT="${1#*=}"; shift ;;
+    --model) MODEL_OPT="${2:-}"; shift 2 ;;
+    --model=*) MODEL_OPT="${1#*=}"; shift ;;
     --set-agent) a="${2:-}"; [ -n "$a" ] || die "usage: sniffr --set-agent <name>"
-      case "$a" in codex|claude|cursor-agent|grok|opencode|ollama) ;;
+      case "$a" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) ;;
         *) echo "sniffr: note — '$a' isn't a built-in; set SNIFFR_CMD for a custom tool" >&2 ;; esac
       mkdir -p "$CONF_DIR"; printf '%s\n' "$a" > "$CONF_DIR/agent"
       echo "sniffr: default agent set to '$a' (~/.config/sniffr/agent)"; exit 0 ;;
     --show-agent) echo "sniffr: default agent = $(default_agent)"; exit 0 ;;
-    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     -*) die "unknown flag: $1" ;;
     *) target="$1"; shift ;;
   esac
@@ -519,7 +525,7 @@ case "$backend" in
   hunk)  command -v hunk  >/dev/null || die "$(backend_missing_hint hunk)" ;;
 esac
 if [ -z "${SNIFFR_CMD:-}" ]; then
-  case "$AGENT" in codex|claude|cursor-agent|grok|opencode|ollama) : ;;
+  case "$AGENT" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
     *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor-agent grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
   ab=$(agent_bin "$AGENT")
   command -v "$ab" >/dev/null || die "agent '$AGENT' selected but '$ab' isn't installed or on PATH — install it, pick another with --agent, set SNIFFR_CMD='<cmd>', or run 'sniffr doctor'."

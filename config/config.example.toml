@@ -20,6 +20,9 @@ backend = "tuicr"
 #
 # max = 8   # cap on findings per review (SNIFFR_MAX env overrides)
 
+# model = "gpt-5.3-codex"   # model for the agent (--model flag / SNIFFR_MODEL
+#                           # env override; unset = the agent's own default/auto)
+
 # --- Review pane ------------------------------------------------------------
 # How sniffr opens the reviewer inside herdr. Defaults: a right-hand split.
 # [pane]
