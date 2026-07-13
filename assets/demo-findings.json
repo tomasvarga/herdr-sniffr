@@ -1,0 +1,4 @@
+[
+  {"file":"auth.py","code":"query = \"SELECT * FROM users WHERE token = '\" + token + \"'\"","type":"bug","body":"SQL injection: the user-supplied token is concatenated straight into the query. Use a parameterized query."},
+  {"file":"auth.py","code":"admin_password = \"hunter2\"","type":"risk","body":"Hardcoded credential in source. Load it from a secret / environment variable instead."}
+]

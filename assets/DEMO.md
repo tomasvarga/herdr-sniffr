@@ -1,55 +1,72 @@
 # Recording the sniffr demo GIF
 
 `assets/demo.gif` is recorded **automatically** with [VHS](https://github.com/charmbracelet/vhs):
-the tape starts a *fresh, isolated herdr session inside VHS's own terminal*, so
-sniffr's tuicr split renders in the same frame VHS captures. `assets/demo.tape`
-is the source.
+the tape (`assets/demo.tape`) starts a *fresh, isolated herdr session inside VHS's
+own terminal*, so sniffr's tuicr split renders in the same frame VHS captures.
 
 ## Prerequisites
 
 - `vhs` and `ffmpeg` on `PATH`.
-- A demo PR with an obvious, reliably-flagged issue. This GIF uses a small
-  private repo, `tomasvarga/sniffr-demo#1` (a token-login handler with a
-  `== None` check and a SQL-injection string-concat) — swap in your own.
-- A working agent (the tape uses the default, `codex`).
+- The demo PR `tomasvarga/sniffr-demo#1` (private) — a token-login handler with a
+  SQL-injection concat and a hardcoded credential. Swap in your own.
 
-## The one gotcha: strip `HERDR_*`
+## The gotchas (each cost a take to discover)
 
-herdr refuses to start **nested** (it detects `HERDR_*` env vars and errors with
-"nested herdr is disabled"). Since you're recording from inside herdr, unset
-those vars for the `vhs` invocation so the herdr *inside VHS* starts clean:
+1. **Strip `HERDR_*`** — herdr refuses to start *nested* ("nested herdr is
+   disabled"). Recording from inside herdr, you must unset those vars so the
+   herdr *inside VHS* starts clean.
+2. **Theme** — the fresh session uses herdr's default (`catppuccin`). Point it at
+   `assets/demo-herdr.toml` (`[theme] name = "tokyo-night"`, `pane_history = false`
+   so old panes aren't restored) via `HERDR_CONFIG_PATH`.
+3. **tuicr must be dark too** — temporarily set `appearance = "dark"` in
+   `~/.config/tuicr/config.toml` (back it up + restore). Do **not** set `theme =`
+   there — that key expects a local theme file and makes tuicr fail to launch.
+4. **Clean the tuicr session first** — a stale/dangling session for the PR makes
+   `tuicr pr` error ("No such file") or stacks duplicate comments. Delete the
+   session file **and** its `index.json` / `active_sessions.json` entries. Match
+   on `sniffr-demo` (the slug is stored as separate fields, not one string).
+5. **Deterministic findings** — a live agent is non-deterministic (dupes, misses).
+   For a clean, repeatable demo, feed curated findings through sniffr's own
+   escape hatch: `SNIFFR_CMD="sleep 7 && cat assets/demo-findings.json"`. The
+   whole pipeline is still real (split, content-anchoring, injection, reload) —
+   only the LLM call is substituted. The 7s sleep gives the async "read while it
+   works" beat.
+
+## Record
 
 ```bash
-env -u HERDR_SOCKET_PATH -u HERDR_PANE_ID -u HERDR_SESSION \
-    -u HERDR_ENV -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_CONFIG_PATH \
+tcfg=~/.config/tuicr/config.toml
+cp "$tcfg" /tmp/tuicr.bak
+printf 'no_update_check = true\nappearance = "dark"\nmouse = true\n' > "$tcfg"
+
+# nuke any stale demo session (files + index) — see gotcha #4
+# ... then:
+env -u HERDR_SOCKET_PATH -u HERDR_PANE_ID -u HERDR_SESSION -u HERDR_ENV \
+    -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID \
+    HERDR_CONFIG_PATH="$PWD/assets/demo-herdr.toml" \
+    SNIFFR_CMD="sleep 7 && cat '$PWD/assets/demo-findings.json'" \
+    SNIFFR_AGENT=codex \
     vhs assets/demo.tape
-herdr session stop demo   # clean up the throwaway session afterwards
+
+herdr session stop sndemo
+cp /tmp/tuicr.bak "$tcfg"   # ALWAYS restore your tuicr config
 ```
 
-The tape (`assets/demo.tape`): `cd ~` → `herdr --session demo` → type
-`sniffr <pr>` → sleep while codex works. tuicr opens instantly; the comment
-lands ~25–30s in when the agent finishes.
-
-## Post-process (trim the boot + dead tail, speed the wait)
-
-The raw capture is ~55s (mostly the agent-wait). Trim to the interesting window
-and 2× it:
+## Post-process (trim boot + tail, speed the wait)
 
 ```bash
-ffmpeg -ss 8 -t 25 -i demo.gif \
-  -filter_complex "[0:v]setpts=0.5*PTS,fps=15,scale=1200:-1:flags=lanczos,\
+ffmpeg -ss 9 -t 18 -i demo.gif \
+  -filter_complex "[0:v]setpts=0.55*PTS,fps=15,scale=1200:-1:flags=lanczos,\
 split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer" \
   -y assets/demo.gif
 ```
 
-Result: ~12s, ~160KB. Adjust `-ss`/`-t` to match where the comment appears in
-your capture (extract frames with `ffmpeg -i demo.gif -vf fps=1 f_%02d.png` to
-find it).
+Result: ~10s, ~175KB. Adjust `-ss`/`-t` to where the comments land in your take.
 
-## Verifying (you can't see the recording live)
+## Verifying (you can't watch the recording live)
 
-Sample frames and inspect them — early (tuicr open, no comments yet) and late
-(comment landed, "Reloaded PR" in the status bar):
+Extract frames and inspect — start (tuicr loading), end (both comments, "Reloaded
+PR" in the status bar):
 
 ```bash
 ffmpeg -i assets/demo.gif -vf fps=1 /tmp/f_%02d.png
