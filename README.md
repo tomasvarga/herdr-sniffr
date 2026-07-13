@@ -9,7 +9,15 @@ flagged. Agent-agnostic (Codex, Claude, Cursor, Grok, opencode, ollama).
 Part of a terminal PR-review workflow on [herdr](https://herdr.dev); pairs with
 [herdr-pickr](https://github.com/tomasvarga/herdr-pickr) (add it as a `[[backend]]`).
 
-> Status: early (v0.1). macOS + GitHub tested.
+> **sniffr never posts to GitHub.** Every comment is a tuicr **local draft** on
+> your machine — you read them, prune the noise (`dd` / `:clearc`), and submit
+> what's left yourself. The AI's pass is private scaffolding for *you*, never
+> something the PR author sees unless you choose to send it.
+
+> Status: early (v0.1). macOS + GitHub tested; Linux date handling supported.
+
+Run `sniffr doctor` first — it checks deps, herdr, `gh` auth, your agent, and
+notifications, and tells you exactly what's missing.
 
 ## How it works
 
@@ -35,6 +43,7 @@ sniffr <pr>                 # number | owner/repo#N | URL   (run from a herdr pa
 sniffr <pr> --agent grok    # one-off agent override
 sniffr --set-agent grok     # save the default agent (--show-agent prints it)
 sniffr queue                # pick from the PRs actually awaiting your review
+sniffr doctor               # preflight: deps, herdr, gh auth, agent, notifier
 ```
 
 Pick the agent (first match wins): `--agent` flag · `SNIFFR_AGENT` env · saved
@@ -75,8 +84,10 @@ sniffr queue --drafts       # add drafts back
 
 ## Requirements
 
-**herdr ≥ 0.7.0**, **tuicr**, `gh`, `jq`, `python3`, and an agent CLI. Runs from
-inside a herdr pane. GitHub only for now.
+**herdr ≥ 0.7.0**, **tuicr**, `gh` (authenticated), `jq`, `python3`, and at
+least one **agent CLI** (codex/claude/cursor/grok/opencode/ollama) installed and
+on your `PATH`. Runs from inside a herdr pane. GitHub only for now. macOS and
+Linux (`sniffr doctor` verifies all of the above).
 
 ## Limitations
 

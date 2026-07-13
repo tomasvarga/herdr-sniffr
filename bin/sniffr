@@ -7,6 +7,10 @@
 #   sniffr <pr>                  pr = number | owner/repo#N | URL
 #   sniffr <pr> --agent grok
 #   sniffr queue [--since 3w]    pick from the PRs awaiting your review
+#   sniffr doctor                check deps, herdr, gh auth, agent, notifier
+#
+# Comments are LOCAL DRAFTS only — sniffr NEVER posts to GitHub. You prune them
+# (dd / :clearc in tuicr) and submit yourself.
 #
 # Agent (first match wins): --agent flag · SNIFFR_AGENT env · saved default
 # (`sniffr --set-agent <name>`, stored in ~/.config/sniffr/agent) · codex.
@@ -22,6 +26,25 @@ default_agent(){
   if [ -n "${SNIFFR_AGENT:-}" ]; then printf '%s' "$SNIFFR_AGENT"
   elif [ -s "$CONF_DIR/agent" ]; then tr -d '[:space:]' < "$CONF_DIR/agent"
   else printf 'codex'; fi
+}
+
+# map an agent name to the binary it invokes (cursor → cursor-agent)
+agent_bin(){ case "$1" in cursor|cursor-agent) echo cursor-agent ;; *) echo "$1" ;; esac; }
+
+# date_ago 21d|3w|2mo|1y -> YYYY-MM-DD, portable across BSD (macOS) and GNU (Linux)
+date_ago(){
+  local spec="$1" num unit bsd
+  case "$spec" in
+    *mo) num="${spec%mo}"; unit=month; bsd=m ;;
+    *d)  num="${spec%d}";  unit=day;   bsd=d ;;
+    *w)  num="${spec%w}";  unit=week;  bsd=w ;;
+    *y)  num="${spec%y}";  unit=year;  bsd=y ;;
+    *) return 1 ;;
+  esac
+  case "$num" in ''|*[!0-9]*) return 1 ;; esac
+  date -v-"${num}${bsd}" +%Y-%m-%d 2>/dev/null && return 0   # BSD / macOS
+  date -d "${num} ${unit}s ago" +%Y-%m-%d 2>/dev/null && return 0  # GNU / Linux
+  return 1
 }
 
 # notify <title> <body> [sound] — prefer the OS notifier (persists in the macOS
@@ -134,6 +157,36 @@ if [ "${1:-}" = "--bg" ]; then
   exit 0
 fi
 
+# ============================ doctor: preflight check =========================
+if [ "${1:-}" = "doctor" ]; then
+  ok(){ printf '  \033[32m✓\033[0m %s\n' "$1"; }
+  no(){ printf '  \033[31m✗\033[0m %s\n' "$1"; MISS=1; }
+  MISS=0
+  echo "sniffr doctor"
+  echo "core dependencies:"
+  for b in gh jq tuicr python3 herdr; do
+    if command -v "$b" >/dev/null; then ok "$b"; else no "$b — required"; fi
+  done
+  echo "environment:"
+  if [ -n "${HERDR_SOCKET_PATH:-}" ]; then ok "inside a herdr pane"; else no "not inside herdr — sniffr must run from a herdr pane"; fi
+  if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then ok "gh authenticated"; else no "gh not authenticated — run: gh auth login"; fi
+  echo "review agent:"
+  A="$(default_agent)"
+  if [ -n "${SNIFFR_CMD:-}" ]; then ok "SNIFFR_CMD set — using a custom command"
+  else
+    b=$(agent_bin "$A")
+    if command -v "$b" >/dev/null; then ok "default agent '$A' ($b) found"
+    else no "default agent '$A' ($b) not installed — install it, use --agent, or set SNIFFR_CMD"; fi
+  fi
+  echo "notifications:"
+  if   command -v terminal-notifier >/dev/null; then ok "terminal-notifier (full-text OS notifications)"
+  elif command -v osascript >/dev/null;         then ok "osascript (macOS notifications)"
+  else no "no OS notifier — falls back to herdr's brief in-app toast"; fi
+  echo ""
+  [ "$MISS" = 0 ] && echo "all good — sniffr is ready." || echo "some checks failed (see ✗ above)."
+  exit "$MISS"
+fi
+
 # ==================== queue: pick a PR from your review list ===================
 # A target picker only — the choice is handed back to the normal path via exec,
 # so `queue` can never drift from `sniffr <pr>`. Defaults: recent · human · ready.
@@ -158,12 +211,7 @@ if [ "${1:-}" = "queue" ]; then
   # --since 21d|3w|2mo|1y  →  a `gh --updated` server-side date filter
   updated=""
   if [ -n "$since" ]; then
-    case "$since" in
-      *mo)    adj="-v-${since%mo}m" ;;            # months (macOS date: m=month)
-      *[dwy]) adj="-v-${since}" ;;                # days / weeks / years
-      *) die "queue: --since wants e.g. 21d, 3w, 2mo, 1y (got '$since')" ;;
-    esac
-    cutoff=$(date $adj +%Y-%m-%d 2>/dev/null) || die "queue: bad --since '$since'"
+    cutoff=$(date_ago "$since") || die "queue: --since wants e.g. 21d, 3w, 2mo, 1y (got '$since')"
     updated=">=$cutoff"
   fi
 
@@ -232,7 +280,7 @@ while [ $# -gt 0 ]; do
       mkdir -p "$CONF_DIR"; printf '%s\n' "$a" > "$CONF_DIR/agent"
       echo "sniffr: default agent set to '$a' (~/.config/sniffr/agent)"; exit 0 ;;
     --show-agent) echo "sniffr: default agent = $(default_agent)"; exit 0 ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
     -*) die "unknown flag: $1" ;;
     *) target="$1"; shift ;;
   esac
@@ -242,6 +290,8 @@ for b in gh jq tuicr python3 herdr; do command -v "$b" >/dev/null || die "missin
 if [ -z "${SNIFFR_CMD:-}" ]; then
   case "$AGENT" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
     *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
+  ab=$(agent_bin "$AGENT")
+  command -v "$ab" >/dev/null || die "agent '$AGENT' selected but '$ab' isn't installed or on PATH — install it, pick another with --agent, set SNIFFR_CMD='<cmd>', or run 'sniffr doctor'."
 fi
 [ -n "${HERDR_SOCKET_PATH:-}" ] || die "not inside herdr — run this from a herdr pane"
 resolve "$target"
