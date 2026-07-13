@@ -59,9 +59,20 @@ drops one, `:clearc` clears all.
 ### Backends — where the findings go
 
 sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a
-**backend** decides how they're presented. Pick one (first match wins):
+**backend** decides how they're presented. Selection (first match wins):
 `--backend` flag · `SNIFFR_BACKEND` env · `backend =` in
-`~/.config/sniffr/config.toml` · **`tuicr`** (default).
+`~/.config/sniffr/config.toml` · else sniffr **auto-detects** an installed
+built-in (tuicr, then hunk). So with nothing configured it uses whichever
+reviewer you already have.
+
+**Choosing a backend:**
+
+| Your setup | What to do |
+|------------|------------|
+| Have **tuicr** | nothing — it's auto-selected |
+| Prefer / only have **hunk** | `backend = "hunk"` (or `--backend hunk`) |
+| Your own reviewer | add a `[backends.<name>]` block (below) |
+| Not sure what you have | `sniffr doctor` — shows the resolved backend + how to fix a missing one |
 
 - **`tuicr`** (built-in, default) — opens `tuicr pr`, injects local-draft
   comments into the live session, reloads.
