@@ -93,7 +93,7 @@ to GitHub (comments are local drafts), so don't push code or post to a PR.
 sniffr <pr>                 # number | owner/repo#N | URL   (run from a herdr pane)
 sniffr <pr> --agent grok    # one-off agent override
 sniffr <pr> --backend hunk  # deliver findings to hunk instead of tuicr
-sniffr <pr> --model gpt-5.3-codex   # model for the agent (else its default)
+sniffr <pr> --model gpt-5.6-codex-high   # model for the agent (else its default)
 sniffr --set-agent grok     # save the default agent (--show-agent prints it)
 sniffr queue                # pick from the PRs actually awaiting your review
 sniffr doctor               # preflight: deps, herdr, gh auth, agent, backend
@@ -109,7 +109,7 @@ drops one, `:clearc` clears all.
 Pick the **model** (first match wins): `--model` flag · `SNIFFR_MODEL` env ·
 `model =` in config · else **each agent's own default** (e.g. cursor's `auto`).
 Applies to any agent (codex · claude · cursor-agent · grok · opencode · ollama);
-use that agent's model naming, e.g. `--model gpt-5.3-codex` (cursor-agent),
+use that agent's model naming, e.g. `--model gpt-5.6-codex-high` (cursor-agent),
 `provider/model` (opencode), or a tag like `llama3.1` (ollama — also needs
 `ollama serve` running + the model pulled). (`cursor` is accepted as an alias for
 `cursor-agent`.)
