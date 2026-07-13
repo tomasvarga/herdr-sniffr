@@ -94,16 +94,17 @@ date_ago(){
   return 1
 }
 
-# notify <title> <body> [sound] — prefer the OS notifier (persists in the macOS
-# notification centre with full text) over herdr's brief in-app toast.
+# notify <title> <body> [sound] — inside herdr, use herdr's own notification
+# (respects the user's [ui.toast] config and always shows); otherwise fall back
+# to an OS notifier. sniffr runs inside herdr, so the herdr path is the norm.
 notify(){
   local title="$1" body="$2" sound="${3:-}"
-  if command -v terminal-notifier >/dev/null 2>&1; then
+  if [ -n "${HERDR_SOCKET_PATH:-}" ] && command -v herdr >/dev/null 2>&1; then
+    herdr notification show "$title" --body "$body" ${sound:+--sound "$sound"} >/dev/null 2>&1
+  elif command -v terminal-notifier >/dev/null 2>&1; then
     terminal-notifier -title "$title" -message "$body" ${sound:+-sound Ping} >/dev/null 2>&1
   elif command -v osascript >/dev/null 2>&1; then
     osascript -e "display notification \"${body//\"/}\" with title \"${title//\"/}\"" >/dev/null 2>&1
-  elif command -v herdr >/dev/null 2>&1; then
-    herdr notification show "$title" --body "$body" ${sound:+--sound "$sound"} >/dev/null 2>&1
   fi
 }
 
@@ -402,9 +403,10 @@ if [ "${1:-}" = "doctor" ]; then
            else no "backend '$BK' is neither a native backend nor defined in $CONFIG_FILE"; fi ;;
   esac
   echo "notifications:"
-  if   command -v terminal-notifier >/dev/null; then ok "terminal-notifier (full-text OS notifications)"
-  elif command -v osascript >/dev/null;         then ok "osascript (macOS notifications)"
-  else no "no OS notifier — falls back to herdr's brief in-app toast"; fi
+  if   [ -n "${HERDR_SOCKET_PATH:-}" ] && command -v herdr >/dev/null; then ok "herdr in-app toasts (used inside herdr)"
+  elif command -v terminal-notifier >/dev/null; then ok "terminal-notifier (OS notifications, outside herdr)"
+  elif command -v osascript >/dev/null;         then ok "osascript (macOS notifications, outside herdr)"
+  else no "no notifier available"; fi
   echo ""
   [ "$MISS" = 0 ] && echo "all good — sniffr is ready." || echo "some checks failed (see ✗ above)."
   exit "$MISS"
