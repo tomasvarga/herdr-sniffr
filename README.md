@@ -105,6 +105,11 @@ cursor · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<command
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
 
+Pick the **model** with `SNIFFR_MODEL` for cursor / opencode / ollama — e.g.
+`SNIFFR_MODEL=gpt-5.3-codex` (cursor; default is `auto`), `provider/model`
+(opencode), or a tag like `llama3.1` (ollama, which also needs `ollama serve`
+running and the model pulled). codex/claude use their own configured model.
+
 **Tune the review** — set `prompt` in `~/.config/sniffr/config.toml` to change
 *what* the agent looks for (security-only, perf-sensitive, project rules, …).
 sniffr always appends the machine-readable output contract itself, so you only

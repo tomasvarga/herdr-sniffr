@@ -157,9 +157,9 @@ ${diff}"
       case "$AGENT" in
         codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check - 2>/dev/null ;;
         claude)              printf '%s' "$prompt" | claude -p 2>/dev/null ;;
-        cursor|cursor-agent) cursor-agent -p --output-format text "$prompt" 2>/dev/null ;;
+        cursor|cursor-agent) cursor-agent -p ${SNIFFR_MODEL:+--model "$SNIFFR_MODEL"} --output-format text "$prompt" 2>/dev/null ;;
         grok)                grok -p "$prompt" 2>/dev/null ;;
-        opencode)            opencode run "$prompt" 2>/dev/null ;;
+        opencode)            opencode run ${SNIFFR_MODEL:+-m "$SNIFFR_MODEL"} "$prompt" 2>/dev/null ;;
         ollama)              printf '%s' "$prompt" | ollama run "${SNIFFR_MODEL:-llama3.1}" 2>/dev/null ;;
       esac )
   }
