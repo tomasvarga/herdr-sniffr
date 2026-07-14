@@ -6,7 +6,7 @@ Set Shell "zsh"
 Set TypingSpeed 40ms
 
 Sleep 1s
-Type "herdr --session scdemo"
+Type "herdr --session __SESSION__"
 Enter
 Sleep 6s
 Type "clear"
@@ -15,4 +15,4 @@ Sleep 600ms
 Type "bash ~/Documents/GitHub/sniffr/assets/demo/showcase.sh"
 Sleep 600ms
 Enter
-Sleep 42s
+Sleep 50s
