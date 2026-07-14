@@ -75,7 +75,7 @@ if [ -n "${HERDR_SOCKET_PATH:-}" ] && command -v herdr >/dev/null 2>&1; then
   prev=""
   for a in "$@"; do
     case "$a" in
-      doctor|queue|setup|open-cmd|--worker|--set-agent|--show-agent|-h|--help) open_pane=0 ;;
+      doctor|queue|setup|open-cmd|update|version|--version|-V|--worker|--set-agent|--show-agent|-h|--help) open_pane=0 ;;
       --format=json) open_pane=0 ;;
       json) [ "$prev" = "--format" ] && open_pane=0 ;;
     esac
