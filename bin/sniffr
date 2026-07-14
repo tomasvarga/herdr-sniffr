@@ -33,6 +33,33 @@ fi
   exit 1
 }
 
+# --- herdr-plugin config ------------------------------------------------------
+# Read once from the herdr plugins config dir (the dir herdr hands plugin actions
+# via HERDR_PLUGIN_CONFIG_DIR, else the standard on-disk path for a plain
+# `sniffr <pr>` typed in a pane). Holds herdr-only settings ([pane]) AND optional
+# engine overrides so you can drive everything from one file when on herdr.
+cfg_json(){
+  local f=""
+  for c in "${HERDR_PLUGIN_CONFIG_DIR:+$HERDR_PLUGIN_CONFIG_DIR/config.toml}" \
+           "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/sniffr/config.toml"; do
+    [ -n "$c" ] && [ -f "$c" ] && { f="$c"; break; }
+  done
+  [ -n "$f" ] || { echo '{}'; return; }
+  python3 -c 'import tomllib,json,sys; print(json.dumps(tomllib.load(open(sys.argv[1],"rb"))))' "$f" 2>/dev/null || echo '{}'
+}
+_cfg="$(cfg_json)"
+
+# Engine overrides: any of these keys in the herdr config is passed to the engine
+# as its SNIFFR_* env. Precedence stays sane — CLI flag > shell env > herdr config
+# > engine config (~/.config/sniffr) > default — because we only set a var the
+# shell hasn't already set, and the engine still lets an explicit flag win.
+_set(){ [ -n "${!1:-}" ] && return 0; local v; v="$(printf '%s' "$_cfg" | jq -r "$2 // empty")"; [ -n "$v" ] && [ "$v" != null ] && export "$1=$v"; }
+_set SNIFFR_AGENT   '.agent'
+_set SNIFFR_MODEL   '.model'
+_set SNIFFR_BACKEND '.backend'
+_set SNIFFR_MAX     '.max'
+_set SNIFFR_PROMPT  '.prompt'
+
 # --- decide whether this invocation should open a reviewer pane ---------------
 # Only a plain "review a PR" call inside herdr opens a pane. Subcommands and
 # --format json pass straight through to the engine.
@@ -58,23 +85,10 @@ if [ "$open_pane" != 1 ]; then
 fi
 
 # --- review path: open the reviewer in a split, then review in the background -
-# Pane placement is a herdr-PLUGIN setting, so it lives in the herdr plugins
-# config dir — NOT in the engine's ~/.config/sniffr/config.toml (which holds the
-# host-agnostic review config the engine reads). Precedence: the config dir
-# herdr hands plugin actions → the standard on-disk path (for a plain
-# `sniffr <pr>` typed in a pane) → built-in defaults.
-cfg_json(){
-  local f=""
-  for c in "${HERDR_PLUGIN_CONFIG_DIR:+$HERDR_PLUGIN_CONFIG_DIR/config.toml}" \
-           "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/sniffr/config.toml"; do
-    [ -n "$c" ] && [ -f "$c" ] && { f="$c"; break; }
-  done
-  [ -n "$f" ] || { echo '{}'; return; }
-  python3 -c 'import tomllib,json,sys; print(json.dumps(tomllib.load(open(sys.argv[1],"rb"))))' "$f" 2>/dev/null || echo '{}'
-}
-PANE_PLACEMENT="$(cfg_json | jq -r '.pane.placement // "split"')"
-PANE_DIR="$(cfg_json | jq -r '.pane.direction // "right"')"
-PANE_RATIO="$(cfg_json | jq -r '.pane.ratio // empty')"
+# Pane placement ([pane] in the herdr config, read above into $_cfg).
+PANE_PLACEMENT="$(printf '%s' "$_cfg" | jq -r '.pane.placement // "split"')"
+PANE_DIR="$(printf '%s' "$_cfg" | jq -r '.pane.direction // "right"')"
+PANE_RATIO="$(printf '%s' "$_cfg" | jq -r '.pane.ratio // empty')"
 case "$PANE_DIR" in right|down) ;; *) PANE_DIR="right" ;; esac
 
 # ask the engine how to launch the resolved backend's viewer (tuicr/hunk/custom)

@@ -146,6 +146,24 @@ direction = "right"   # "right" or "down"
 ratio     = 0.5        # split size, 0.0–1.0
 ```
 
+**Engine overrides from the herdr config** — for convenience you can also set the
+engine's own keys (`agent`, `model`, `backend`, `max`, `prompt`) in that same
+herdr config file, and the plugin passes them through to the engine. This lets
+you drive everything from one file on herdr. Precedence: a CLI flag > a shell env
+var > the herdr config > the engine's `~/.config/sniffr/config.toml` > the
+default — so these override the engine's config, but `sniffr <pr> --agent …`
+still wins.
+
+```toml
+# ~/.config/herdr/plugins/config/sniffr/config.toml
+agent   = "codex,claude"        # override the engine's default agent(s)
+model   = "gpt-5.6-codex-high"
+backend = "hunk"
+
+[pane]
+direction = "down"
+```
+
 ### Backends — where the findings go
 
 sniffr's core (diff → agent → line-anchored findings) is backend-agnostic; a

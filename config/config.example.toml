@@ -1,13 +1,27 @@
 # herdr-sniffr — herdr plugin config
 #
 # Copy to ~/.config/herdr/plugins/config/sniffr/config.toml (the herdr plugins
-# config dir). This file holds ONLY the herdr-specific settings the plugin reads.
+# config dir). Two kinds of settings live here:
+#   1. herdr-only settings the plugin acts on directly ([pane]).
+#   2. optional ENGINE OVERRIDES — a convenience so you can drive the engine from
+#      this one file when on herdr, without editing ~/.config/sniffr/config.toml.
 #
-# The review settings (backend, prompt, max, model, custom backends) belong to
-# the engine, not here — put those in ~/.config/sniffr/config.toml instead. See
-# https://github.com/tomasvarga/sniffr (config/config.example.toml).
+# Precedence for the engine settings: a CLI flag > a shell env var > this file >
+# the engine's own ~/.config/sniffr/config.toml > the engine default. So these
+# override the engine's config, but an explicit `sniffr <pr> --agent …` still wins.
 
-# --- Review pane ------------------------------------------------------------
+# --- Engine overrides (optional) --------------------------------------------
+# Same keys the engine reads from ~/.config/sniffr/config.toml; set here to
+# override them for herdr runs. Omit any you don't want to override.
+# agent   = "codex,claude"        # default agent(s) (comma list = multi-agent)
+# model   = "gpt-5.6-codex-high"  # model for the agent(s); unset = agent default
+# backend = "hunk"                # tuicr | hunk | <custom>; unset = auto-detect
+# max     = 8                     # cap on findings per review
+# prompt  = """
+# You are a security-focused reviewer. Prioritize auth and input validation.
+# """                             # what the agent looks for (contract is appended)
+
+# --- Review pane (herdr-only) -----------------------------------------------
 # How the plugin opens the reviewer inside herdr. Defaults: a right-hand split.
 # [pane]
 # placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
