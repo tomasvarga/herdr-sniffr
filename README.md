@@ -16,7 +16,7 @@ opencode, ollama) and backend-agnostic (tuicr · hunk · custom).
 > hands the actual review to the engine (which it installs for you). Not on
 > herdr? Use the engine directly.
 
-![sniffr in action](assets/demo.gif)
+![sniffr in action — tuicr + hunk, multi-agent review then consensus](assets/demo/showcase.gif)
 
 Part of a terminal PR-review workflow on [herdr](https://herdr.dev); pairs with
 [herdr-pickr](https://github.com/tomasvarga/herdr-pickr) (add it as a `[[backend]]`).
