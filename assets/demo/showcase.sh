@@ -11,8 +11,8 @@ PR="${DEMO_PR:-tomasvarga/sniffr-demo#7}"
 REPO="${PR%#*}"; NUM="${PR##*#}"; SLUG="gh:${REPO}/pr/${NUM}"
 PATCH="${DEMO_PATCH:-$HERE/payments.patch}"
 RAW="$HERE/raw.json"; CONS="$HERE/consensus.json"
-STEP="${SHOWCASE_STEP:-0.6}"     # delay between comments
-BEAT="${SHOWCASE_BEAT:-2.5}"     # pause between beats
+STEP="${SHOWCASE_STEP:-0.2}"     # delay between comments
+BEAT="${SHOWCASE_BEAT:-1.8}"     # pause between beats
 
 icon(){ case "$1" in critical) printf '🔴';; high) printf '🟠';; medium) printf '🟡';; low) printf '⚪';; *) printf '·';; esac; }
 # badge body: "<icon> <sev> · <type>[ · N agents (chips)]" + finding + "↳ fix: …"
@@ -43,7 +43,7 @@ TU=$(jq -r '.result.pane.pane_id//empty' <<<"$outR")
 herdr pane run "$TU" "tuicr pr $PR"
 outB=$(herdr pane split "$TU" --direction down --ratio 0.5 --focus 2>/dev/null)
 HU=$(jq -r '.result.pane.pane_id//empty' <<<"$outB")
-herdr pane run "$HU" "hunk patch '$PATCH' --agent-notes --watch"   # show agent notes + auto-reload
+herdr pane run "$HU" "hunk patch '$PATCH' --agent-notes --watch --theme tokyo-night"   # show agent notes + auto-reload
 # wait for both sessions
 for _ in $(seq 1 40); do tuicr review list --repo "$REPO" 2>/dev/null | jq -e --arg s "$SLUG" 'any(.[]?;.slug==$s)' >/dev/null 2>&1 && break; sleep 0.4; done
 HSID=""; for _ in $(seq 1 40); do HSID=$(hunk session list --json 2>/dev/null | jq -r --arg p "$PATCH" '.sessions[]?|select(.sourceLabel==$p)|.sessionId'|head -1); [ -n "$HSID" ] && break; sleep 0.4; done
@@ -55,7 +55,7 @@ sleep 0.5
 # ---- BEAT 1: multi-agent review ------------------------------------------
 printf '\n  ▸ sniffr %s --agent codex,claude,cursor\n' "$PR"
 printf '    multi-agent review — findings land in tuicr (top) + hunk (bottom)\n\n'
-while IFS= read -r it; do ag=$(jq -r '.agent//"agent"' <<<"$it"); tui_add "$it" "$ag"; hunk_add "$it" "$ag"; sleep "$STEP"; done < <(jq -c 'sort_by(.line,.agent)[]' "$RAW")
+while IFS= read -r it; do ag=$(jq -r '.agent//"agent"' <<<"$it"); tui_add "$it" "$ag"; hunk_add "$it" "$ag"; sleep "$STEP"; done < <(jq -c 'sort_by(.line,.agent) | .[0:14][]' "$RAW")
 sleep "$BEAT"
 
 # ---- BEAT 2: consensus ----------------------------------------------------
@@ -65,5 +65,12 @@ clear_tuicr
 hunk session comment clear "$HSID" --all --yes >/dev/null 2>&1
 sleep 1
 while IFS= read -r it; do tui_add "$it" consensus; hunk_add "$it" consensus; sleep "$STEP"; done < <(jq -c 'sort_by(.line)[]' "$CONS")
+# walk through the merged comments in BOTH panes so viewers can follow along:
+# hunk jumps to the next annotated hunk; tuicr ']' jumps to the next hunk.
+for _ in 1 2 3 4; do
+  hunk session navigate "$HSID" --next-comment >/dev/null 2>&1
+  herdr pane send-text "$TU" ']' >/dev/null 2>&1
+  sleep 0.7
+done
 printf '  ✓ %s raw findings → %s deduped, severity-ranked comments\n' "$(jq 'length' "$RAW")" "$(jq 'length' "$CONS")"
 sleep "$BEAT"
