@@ -58,10 +58,18 @@ if [ "$open_pane" != 1 ]; then
 fi
 
 # --- review path: open the reviewer in a split, then review in the background -
-# pane placement is configurable via [pane] in ~/.config/sniffr/config.toml
+# Pane placement is a herdr-PLUGIN setting, so it lives in the herdr plugins
+# config dir — NOT in the engine's ~/.config/sniffr/config.toml (which holds the
+# host-agnostic review config the engine reads). Precedence: the config dir
+# herdr hands plugin actions → the standard on-disk path (for a plain
+# `sniffr <pr>` typed in a pane) → built-in defaults.
 cfg_json(){
-  local f="$HOME/.config/sniffr/config.toml"
-  [ -f "$f" ] || { echo '{}'; return; }
+  local f=""
+  for c in "${HERDR_PLUGIN_CONFIG_DIR:+$HERDR_PLUGIN_CONFIG_DIR/config.toml}" \
+           "${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/sniffr/config.toml"; do
+    [ -n "$c" ] && [ -f "$c" ] && { f="$c"; break; }
+  done
+  [ -n "$f" ] || { echo '{}'; return; }
   python3 -c 'import tomllib,json,sys; print(json.dumps(tomllib.load(open(sys.argv[1],"rb"))))' "$f" 2>/dev/null || echo '{}'
 }
 PANE_PLACEMENT="$(cfg_json | jq -r '.pane.placement // "split"')"

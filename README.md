@@ -133,9 +133,13 @@ prompt = "You are a security-focused reviewer. Prioritize auth and input validat
 max    = 8
 ```
 
-**Pane placement** — how the reviewer opens in herdr (default: a right split):
+**Pane placement** — how the reviewer opens in herdr (default: a right split).
+This is a herdr-plugin setting, so it lives in the **herdr plugins config dir**
+(`~/.config/herdr/plugins/config/sniffr/config.toml`), separate from the engine's
+`~/.config/sniffr/config.toml` above:
 
 ```toml
+# ~/.config/herdr/plugins/config/sniffr/config.toml
 [pane]
 placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
 direction = "right"   # "right" or "down"
