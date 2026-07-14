@@ -10,7 +10,11 @@ its findings in as draft comments, so by the time you start reading, the risky
 lines are already flagged. Agent-agnostic (Codex, Claude, Cursor, Grok,
 opencode, ollama) and backend-agnostic (tuicr · hunk · custom).
 
-> The command is **`sniffr`**; the plugin/repo is **herdr-sniffr**.
+> The command is **`sniffr`**; the plugin/repo is **herdr-sniffr**. This is the
+> **herdr layer** over the standalone [`sniffr`](https://github.com/tomasvarga/sniffr)
+> engine — it opens the reviewer pane and wires herdr's reload + toast, then
+> hands the actual review to the engine (which it installs for you). Not on
+> herdr? Use the engine directly.
 
 ![sniffr in action](assets/demo.gif)
 
@@ -41,7 +45,7 @@ sniffr <pr>
 Paste this into any coding agent with shell access (Claude Code, Codex, Cursor,
 …). It installs sniffr, resolves deps, picks a backend + agent, and verifies —
 asking you only when there's a real choice. (Same as `sniffr setup` once
-installed; also in [`SETUP_PROMPT.md`](SETUP_PROMPT.md).)
+installed.)
 
 ```text
 Set up sniffr on my machine — a CLI that, pointed at a GitHub PR, opens it in my
@@ -70,7 +74,9 @@ to GitHub (comments are local drafts), so don't push code or post to a PR.
 
 ## Install (manual)
 
-One-liner (clones to `~/.local/share/sniffr`, symlinks `sniffr` into `~/.local/bin`):
+One-liner (clones herdr-sniffr to `~/.local/share/herdr-sniffr`, **bootstraps the
+[`sniffr`](https://github.com/tomasvarga/sniffr) engine** into `~/.local/share/sniffr`,
+and links the launcher onto your PATH as `sniffr`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/tomasvarga/herdr-sniffr/main/install.sh | bash
@@ -127,13 +133,35 @@ prompt = "You are a security-focused reviewer. Prioritize auth and input validat
 max    = 8
 ```
 
-**Pane placement** — how the reviewer opens in herdr (default: a right split):
+**Pane placement** — how the reviewer opens in herdr (default: a right split).
+This is a herdr-plugin setting, so it lives in the **herdr plugins config dir**
+(`~/.config/herdr/plugins/config/sniffr/config.toml`), separate from the engine's
+`~/.config/sniffr/config.toml` above:
 
 ```toml
+# ~/.config/herdr/plugins/config/sniffr/config.toml
 [pane]
 placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
 direction = "right"   # "right" or "down"
 ratio     = 0.5        # split size, 0.0–1.0
+```
+
+**Engine overrides from the herdr config** — for convenience you can also set the
+engine's own keys (`agent`, `model`, `backend`, `max`, `prompt`) in that same
+herdr config file, and the plugin passes them through to the engine. This lets
+you drive everything from one file on herdr. Precedence: a CLI flag > a shell env
+var > the herdr config > the engine's `~/.config/sniffr/config.toml` > the
+default — so these override the engine's config, but `sniffr <pr> --agent …`
+still wins.
+
+```toml
+# ~/.config/herdr/plugins/config/sniffr/config.toml
+agent   = "codex,claude"        # override the engine's default agent(s)
+model   = "gpt-5.6-codex-high"
+backend = "hunk"
+
+[pane]
+direction = "down"
 ```
 
 ### Backends — where the findings go
@@ -206,16 +234,19 @@ sniffr queue --drafts       # add drafts back
 
 ## Requirements
 
-**herdr ≥ 0.7.0**, `gh` (authenticated), `jq`, `python3` (≥3.11 for config), and
-at least one **agent CLI** (codex/claude/cursor-agent/grok/opencode/ollama) on your
-`PATH`. Plus the binary for your backend: **tuicr** (default) or
+**herdr ≥ 0.7.0**, the **[`sniffr`](https://github.com/tomasvarga/sniffr) engine**
+(installed automatically), `gh` (authenticated), `jq`, `python3` (≥3.11 for
+config), and at least one **agent CLI** (codex/claude/cursor-agent/grok/opencode/
+ollama) on your `PATH`. Plus the binary for your backend: **tuicr** (default) or
 **[hunk](https://hunk.dev)**. Runs from inside a herdr pane. GitHub only for now.
 macOS and Linux (`sniffr doctor` verifies all of the above).
 
 ## Limitations
 
-- **herdr + tuicr required** (v0.1) — sniffr opens tuicr in a herdr split and
-  reloads it. (A herdr-optional mode is a possible future direction.)
+- **This plugin needs herdr** — it opens the reviewer in a herdr split and
+  reloads it. Not on herdr? The [`sniffr`](https://github.com/tomasvarga/sniffr)
+  engine runs standalone (attach mode or `--format json`); this plugin is just
+  the herdr integration on top of it.
 - **Line anchoring** is by content: the agent quotes the exact line, and sniffr
   parses the diff to resolve the real new-side line number (the agent's own count
   is only a tiebreaker). A quote that can't be matched becomes a file-level comment.

@@ -1,50 +1,29 @@
-# sniffr config — copy to ~/.config/sniffr/config.toml
+# herdr-sniffr — herdr plugin config
 #
-# Chooses where the agent's findings are delivered. With NO config, sniffr uses
-# the "tuicr" backend — so you only need this file to switch backends or add
-# custom ones. Precedence: `--backend` flag > SNIFFR_BACKEND env > this file > tuicr.
-
-# Built-in backends: "tuicr" (default) and "hunk".
-backend = "tuicr"
-
-# --- Review tuning ----------------------------------------------------------
-# `prompt` customizes WHAT the agent looks for. sniffr always appends the
-# machine-readable output contract itself, so DON'T describe the JSON format
-# here — just the review focus/persona. Omit to use the built-in default
-# ("senior code reviewer … high-signal findings only, no nits").
+# Copy to ~/.config/herdr/plugins/config/sniffr/config.toml (the herdr plugins
+# config dir). Two kinds of settings live here:
+#   1. herdr-only settings the plugin acts on directly ([pane]).
+#   2. optional ENGINE OVERRIDES — a convenience so you can drive the engine from
+#      this one file when on herdr, without editing ~/.config/sniffr/config.toml.
 #
-# prompt = """
-# You are a security-focused reviewer. Prioritize auth, input validation, and
-# secrets. Flag perf regressions. Ignore style and formatting entirely.
-# """
-#
-# max = 8   # cap on findings per review (SNIFFR_MAX env overrides)
+# Precedence for the engine settings: a CLI flag > a shell env var > this file >
+# the engine's own ~/.config/sniffr/config.toml > the engine default. So these
+# override the engine's config, but an explicit `sniffr <pr> --agent …` still wins.
 
-# model = "gpt-5.6-codex-high"   # model for the agent (--model flag / SNIFFR_MODEL
-#                           # env override; unset = the agent's own default/auto)
+# --- Engine overrides (optional) --------------------------------------------
+# Same keys the engine reads from ~/.config/sniffr/config.toml; set here to
+# override them for herdr runs. Omit any you don't want to override.
+# agent   = "codex,claude"        # default agent(s) (comma list = multi-agent)
+# model   = "gpt-5.6-codex-high"  # model for the agent(s); unset = agent default
+# backend = "hunk"                # tuicr | hunk | <custom>; unset = auto-detect
+# max     = 8                     # cap on findings per review
+# prompt  = """
+# You are a security-focused reviewer. Prioritize auth and input validation.
+# """                             # what the agent looks for (contract is appended)
 
-# --- Review pane ------------------------------------------------------------
-# How sniffr opens the reviewer inside herdr. Defaults: a right-hand split.
+# --- Review pane (herdr-only) -----------------------------------------------
+# How the plugin opens the reviewer inside herdr. Defaults: a right-hand split.
 # [pane]
 # placement = "split"   # "split" (side-by-side) or "zoom" (maximize the reviewer)
 # direction = "right"   # split direction: "right" or "down"
 # ratio     = 0.5        # split size, 0.0–1.0
-
-# --- Custom backends --------------------------------------------------------
-# Define your own review tool as a backend. sniffr resolves the agent's findings
-# (a JSON array of {file, line, type, body}, line-anchored by content), then:
-#   • runs `open`   to launch the viewer in a herdr split (optional)
-#   • runs `inject` with the findings JSON piped to its stdin
-# Placeholders expanded in both commands: {url} {repo} {num} {diff} {pane}
-#   {diff} = path to the PR's unified-diff file · {pane} = the herdr pane id
-#
-# Example — a reviewer that opens by URL and imports findings from stdin:
-#
-# [backends.myreviewr]
-# open   = "myreviewr open {url}"
-# inject = "myreviewr import --stdin"
-#
-# Example — no viewer, just write the findings to a sidecar file:
-#
-# [backends.sidecar]
-# inject = "cat > /tmp/findings-{num}.json"
