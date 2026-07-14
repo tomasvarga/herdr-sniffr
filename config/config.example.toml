@@ -20,6 +20,15 @@
 # prompt  = """
 # You are a security-focused reviewer. Prioritize auth and input validation.
 # """                             # what the agent looks for (contract is appended)
+#
+# min_severity   = "high"         # only keep critical/high findings
+# min_confidence = 0.6            # drop findings the agent is <60% sure about
+#
+# Multi-agent consensus — merge several agents' findings into one deduped comment
+# per bug (agent chips) via a cheap model. Setting [consensus].model turns it on.
+# [consensus]
+# model = "claude-haiku-4-5"      # the cheap merge model
+# agent = "claude"                # CLI that runs the merge (default: first agent)
 
 # --- Review pane (herdr-only) -----------------------------------------------
 # How the plugin opens the reviewer inside herdr. Defaults: a right-hand split.

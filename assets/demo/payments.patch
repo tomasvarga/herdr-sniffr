@@ -1,0 +1,59 @@
+diff --git a/payments.py b/payments.py
+new file mode 100644
+index 0000000..f3585de
+--- /dev/null
++++ b/payments.py
+@@ -0,0 +1,53 @@
++import sqlite3
++import threading
++
++CACHE = {}
++counter = 0
++_lock = threading.Lock()
++
++
++def get_user(db, user_id):
++    cur = db.execute("SELECT * FROM users WHERE id = '%s'" % user_id)
++    return cur.fetchone()
++
++
++def charge(db, user_id, amount):
++    user = get_user(db, user_id)
++    balance = user["balance"]
++    new_balance = balance - amount
++    db.execute("UPDATE users SET balance = %d WHERE id = %s" % (new_balance, user_id))
++    return new_balance
++
++
++def open_report(path):
++    f = open(path)
++    data = f.read()
++    return data
++
++
++def increment():
++    global counter
++    counter = counter + 1
++
++
++def parse_amount(s):
++    return int(s)
++
++
++def is_admin(user):
++    if user.get("role") == None:
++        return True
++    return user["role"] == "admin"
++
++
++def divide_total(total, items):
++    return total / len(items)
++
++
++def refund(db, user_id, amount):
++    with _lock:
++        user = get_user(db, user_id)
++        db.execute(
++            "UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id)
++        )
++    return True

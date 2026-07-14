@@ -59,6 +59,12 @@ _set SNIFFR_MODEL   '.model'
 _set SNIFFR_BACKEND '.backend'
 _set SNIFFR_MAX     '.max'
 _set SNIFFR_PROMPT  '.prompt'
+# multi-agent consensus + noise filters (setting [consensus].model turns consensus on)
+_set SNIFFR_CONSENSUS_MODEL  '.consensus.model'
+_set SNIFFR_CONSENSUS_AGENT  '.consensus.agent'
+_set SNIFFR_CONSENSUS_PROMPT '.consensus.prompt'
+_set SNIFFR_MIN_SEVERITY     '.min_severity'
+_set SNIFFR_MIN_CONFIDENCE   '.min_confidence'
 
 # --- decide whether this invocation should open a reviewer pane ---------------
 # Only a plain "review a PR" call inside herdr opens a pane. Subcommands and
