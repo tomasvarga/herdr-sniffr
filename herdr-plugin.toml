@@ -1,6 +1,6 @@
 id = "sniffr"
 name = "herdr-sniffr"
-version = "0.6.1"
+version = "0.7.0"
 min_herdr_version = "0.7.0"
 description = "AI pre-review: point it at a GitHub PR → opens it in your terminal reviewer (tuicr/hunk) and an agent drops draft comments on the risky lines before you read. Comments stay local until you submit."
 platforms = ["macos", "linux"]

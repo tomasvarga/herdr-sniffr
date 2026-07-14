@@ -89,6 +89,7 @@ Then `sniffr doctor` to check your setup.
 ```bash
 sniffr <pr>                 # number | owner/repo#N | URL   (run from a herdr pane)
 sniffr <pr> --agent grok    # one-off agent override
+sniffr <pr> --agent codex,claude,grok   # several agents, one pass (stamped per agent)
 sniffr <pr> --backend hunk  # deliver findings to hunk instead of tuicr
 sniffr <pr> --model gpt-5.6-codex-high   # model for the agent (else its default)
 sniffr --set-agent grok     # save the default agent (--show-agent prints it)
@@ -102,6 +103,11 @@ cursor-agent · grok · opencode · ollama**. Any other tool via `SNIFFR_CMD='<c
 (gets the review prompt on stdin, must print a JSON array of findings). Findings
 are stamped with the agent name so they're distinct from yours; in tuicr `dd`
 drops one, `:clearc` clears all.
+
+**Multiple agents, one pass** — pass a comma list (`--agent codex,claude,grok`).
+Each reviews the same diff and its findings are injected **stamped by agent**, so
+you see who flagged what (two agents on the same line = high signal). They run
+sequentially (~30s each), appearing progressively.
 
 Pick the **model** (first match wins): `--model` flag · `SNIFFR_MODEL` env ·
 `model =` in config · else **each agent's own default** (e.g. cursor's `auto`).

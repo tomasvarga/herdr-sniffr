@@ -5,7 +5,7 @@
 # when they land. You start reading right away — comments appear a few sec later.
 #
 #   sniffr <pr>                  pr = number | owner/repo#N | URL
-#   sniffr <pr> --agent grok
+#   sniffr <pr> --agent grok           one agent, or a comma list (codex,claude)
 #   sniffr <pr> --backend hunk   deliver findings to hunk instead of tuicr
 #   sniffr <pr> --model <name>   model for the agent (else its default/auto)
 #   sniffr queue [--since 3w]    pick from the PRs awaiting your review
@@ -127,7 +127,9 @@ resolve(){
 # ===================== WORKER: review, inject, reload (bg) =====================
 if [ "${1:-}" = "--worker" ]; then
   target="$2"; pid="$3"; backend="${4:-tuicr}"
-  AGENT="$(default_agent)"
+  # one or more agents (comma-separated) — each reviews the diff, stamped by name
+  AGENTS="$(default_agent)"; AGENTS="${AGENTS//,/ }"
+  [ -n "${SNIFFR_CMD:-}" ] && AGENTS="${AGENTS%% *}"   # SNIFFR_CMD is one command
   # max findings: SNIFFR_MAX env → config `max` → 8
   MAX="${SNIFFR_MAX:-$(cfg_json | jq -r '.max // 8')}"
   # model: SNIFFR_MODEL env (set by --model flag or the caller) → config `model`
@@ -157,9 +159,10 @@ ${diff}"
   printf '%s' "$diff" > "$scratch/diff.patch"
   DIFF_PATH="$scratch/diff.patch"
   run_agent(){
+    local ag="$1"
     if [ -n "${SNIFFR_CMD:-}" ]; then printf '%s' "$prompt" | ( cd "$scratch" && eval "$SNIFFR_CMD" ); return; fi
     ( cd "$scratch"
-      case "$AGENT" in
+      case "$ag" in
         codex)               printf '%s' "$prompt" | codex exec --skip-git-repo-check ${MODEL:+--model "$MODEL"} - 2>/dev/null ;;
         claude)              printf '%s' "$prompt" | claude -p ${MODEL:+--model "$MODEL"} 2>/dev/null ;;
         cursor|cursor-agent) cursor-agent -f -p ${MODEL:+--model "$MODEL"} --output-format text "$prompt" 2>/dev/null ;;
@@ -168,14 +171,25 @@ ${diff}"
         ollama)              printf '%s' "$prompt" | ollama run "${MODEL:-llama3.1}" 2>/dev/null ;;
       esac )
   }
-  raw=$(run_agent)
-  printf '%s' "$raw" > "$scratch/agent.out"
-  # Extract the agent's JSON array, then ANCHOR each finding to a real line by
-  # matching its verbatim `code` quote against the diff's new-side lines. The
-  # agent's counted `line` is only a fallback/tiebreaker — quotes don't drift.
-  # NB: the program is fed via the heredoc on stdin, so the agent output and the
-  # diff are passed as FILE ARGS — piping into `python3 -` would clobber stdin.
-  findings=$(python3 - "$scratch/diff.patch" "$scratch/agent.out" <<'PY'
+  # ---- locate the live backend session ONCE (before the agent loop) --------
+  found=0; sid=""; patch="${TMPDIR:-/tmp}/sniffr-${num}.patch"
+  case "$backend" in
+    tuicr) for _ in $(seq 1 45); do tuicr review list --repo "$repo" 2>/dev/null | jq -e --arg s "$slug" 'any(.[]?; .slug==$s)' >/dev/null 2>&1 && { found=1; break; }; sleep 0.7; done ;;
+    hunk)  for _ in $(seq 1 45); do sid=$(hunk session list --json 2>/dev/null | jq -r --arg p "$patch" '.sessions[]? | select(.sourceLabel==$p) | .sessionId' | head -1); [ -n "$sid" ] && break; sleep 0.7; done ;;
+  esac
+  if { [ "$backend" = tuicr ] && [ "$found" != 1 ]; } || { [ "$backend" = hunk ] && [ -z "$sid" ]; }; then
+    notify "sniffr" "couldn't attach to the $backend session for PR #${num} — is it still open?"; exit 0
+  fi
+
+  # ---- each agent reviews the same diff; inject + reload progressively ------
+  total=0; nag=0
+  for ag in $AGENTS; do
+    nag=$((nag+1))
+    printf '%s' "$(run_agent "$ag")" > "$scratch/agent.out"
+    # Extract this agent's JSON array, then ANCHOR each finding to a real line by
+    # matching its verbatim `code` quote against the diff (line is a fallback).
+    # Program via heredoc on stdin; diff + agent output are passed as FILE ARGS.
+    findings=$(python3 - "$scratch/diff.patch" "$scratch/agent.out" <<'PY'
 import sys, json, re, os
 
 diff_path = sys.argv[1]
@@ -283,68 +297,37 @@ for it in findings:
 print(json.dumps(out))
 PY
 )
-  total=$(printf '%s' "$findings" | jq 'length' 2>/dev/null || echo 0)
-
-  # ---- inject the findings into the chosen backend --------------------------
-  case "$backend" in
-  tuicr)
-    # wait for tuicr to open the PR and persist the session to disk
-    found=0
-    for _ in $(seq 1 45); do
-      if tuicr review list --repo "$repo" 2>/dev/null | jq -e --arg s "$slug" 'any(.[]?; .slug==$s)' >/dev/null 2>&1; then found=1; break; fi
-      sleep 0.7
-    done
+    # ---- inject this agent's findings, stamped with its name --------------
     n=0
-    if [ "$found" = 1 ]; then
+    case "$backend" in
+    tuicr)
       while IFS= read -r item; do
         [ -n "$item" ] || continue
         file=$(jq -r '.file // empty'  <<<"$item"); line=$(jq -r '.line // empty' <<<"$item")
         typ=$( jq -r '.type // "note"' <<<"$item"); body=$(jq -r '.body // empty' <<<"$item")
         [ -n "$file" ] && [ -n "$body" ] || continue
         if [ -n "$line" ] && [ "$line" != "null" ]; then
-          tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --line "$line" --side new --username "$AGENT" "$body" >/dev/null 2>&1 && n=$((n+1))
+          tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --line "$line" --side new --username "$ag" "$body" >/dev/null 2>&1 && n=$((n+1))
         else
-          tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --username "$AGENT" "$body" >/dev/null 2>&1 && n=$((n+1))
+          tuicr review add --session "$slug" --repo "$repo" --type "$typ" --target-file "$file" --username "$ag" "$body" >/dev/null 2>&1 && n=$((n+1))
         fi
       done < <(printf '%s' "$findings" | jq -c '.[]?')
-      [ -n "$pid" ] && { herdr pane send-text "$pid" ":e" >/dev/null 2>&1; herdr pane send-text "$pid" $'\r' >/dev/null 2>&1; }
-    fi
-    if   [ "$found" != 1 ]; then notify "sniffr" "$AGENT couldn't attach to the tuicr session for PR #${num} — is it still open?"
-    elif [ "$n" -gt 0 ];    then notify "sniffr — review ready" "$AGENT left $n comment(s) on PR #${num}."
-    else                         notify "sniffr" "$AGENT sniffed PR #${num} and flagged nothing."
-    fi ;;
+      [ -n "$pid" ] && { herdr pane send-text "$pid" ":e" >/dev/null 2>&1; herdr pane send-text "$pid" $'\r' >/dev/null 2>&1; } ;;
+    hunk)
+      batch=$(printf '%s' "$findings" | jq -c --arg a "$ag" \
+        '{comments: [ .[] | select(.line != null) | {filePath:.file, newLine:.line, summary:.body, author:$a} ]}')
+      n=$(printf '%s' "$batch" | jq '.comments | length')
+      [ "${n:-0}" -gt 0 ] && { printf '%s' "$batch" | hunk session comment apply "$sid" --stdin --focus >/dev/null 2>&1 || n=0; } ;;
+    *)
+      inj=$(cfg_backend_cmd "$backend" inject)
+      if [ -n "$inj" ]; then inj=$(expand_ph "$inj"); printf '%s' "$findings" | ( eval "$inj" ) >/dev/null 2>&1 && n=$(printf '%s' "$findings" | jq 'length' 2>/dev/null || echo 0); fi ;;
+    esac
+    total=$((total + ${n:-0}))
+  done
 
-  hunk)
-    # find the live hunk session for the patch we opened (match by sourceLabel)
-    patch="${TMPDIR:-/tmp}/sniffr-${num}.patch"
-    sid=""
-    for _ in $(seq 1 45); do
-      sid=$(hunk session list --json 2>/dev/null | jq -r --arg p "$patch" '.sessions[]? | select(.sourceLabel==$p) | .sessionId' | head -1)
-      [ -n "$sid" ] && break; sleep 0.7
-    done
-    # hunk comments require a line target → keep only line-anchored findings
-    batch=$(printf '%s' "$findings" | jq -c --arg a "$AGENT" \
-      '{comments: [ .[] | select(.line != null) | {filePath:.file, newLine:.line, summary:.body, author:$a} ]}')
-    n=$(printf '%s' "$batch" | jq '.comments | length')
-    if [ -n "$sid" ] && [ "${n:-0}" -gt 0 ]; then
-      printf '%s' "$batch" | hunk session comment apply "$sid" --stdin --focus >/dev/null 2>&1 || n=0
-    fi
-    if   [ -z "$sid" ];      then notify "sniffr" "$AGENT couldn't attach to the hunk session for PR #${num} — is it still open?"
-    elif [ "${n:-0}" -gt 0 ]; then notify "sniffr — review ready" "$AGENT left $n comment(s) on PR #${num}."
-    else                          notify "sniffr" "$AGENT sniffed PR #${num} and flagged nothing anchorable."
-    fi ;;
-
-  *)
-    # custom backend: pipe the resolved findings JSON to its `inject` command
-    inject=$(cfg_backend_cmd "$backend" inject)
-    if [ -z "$inject" ]; then notify "sniffr" "backend '$backend' has no inject command in config"; exit 0; fi
-    inject=$(expand_ph "$inject")
-    if printf '%s' "$findings" | ( eval "$inject" ) >/dev/null 2>&1; then
-      notify "sniffr — review ready" "$AGENT sent $total finding(s) to '$backend' for PR #${num}."
-    else
-      notify "sniffr" "backend '$backend' inject failed for PR #${num}."
-    fi ;;
-  esac
+  if [ "${total:-0}" -gt 0 ]; then notify "sniffr — review ready" "$nag agent(s) left $total comment(s) on PR #${num}."
+  else                             notify "sniffr" "sniffed PR #${num} and flagged nothing."
+  fi
   exit 0
 fi
 
@@ -527,10 +510,13 @@ case "$backend" in
   hunk)  command -v hunk  >/dev/null || die "$(backend_missing_hint hunk)" ;;
 esac
 if [ -z "${SNIFFR_CMD:-}" ]; then
-  case "$AGENT" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
-    *) die "unknown agent '$AGENT'. Built-ins: codex claude cursor-agent grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
-  ab=$(agent_bin "$AGENT")
-  command -v "$ab" >/dev/null || die "agent '$AGENT' selected but '$ab' isn't installed or on PATH — install it, pick another with --agent, set SNIFFR_CMD='<cmd>', or run 'sniffr doctor'."
+  # --agent may be a comma list (multi-agent review); validate + check each
+  for ag in ${AGENT//,/ }; do
+    case "$ag" in codex|claude|cursor|cursor-agent|grok|opencode|ollama) : ;;
+      *) die "unknown agent '$ag'. Built-ins: codex claude cursor-agent grok opencode ollama — or set SNIFFR_CMD='<cmd>'." ;; esac
+    ab=$(agent_bin "$ag")
+    command -v "$ab" >/dev/null || die "agent '$ag' selected but '$ab' isn't installed or on PATH — install it, pick another with --agent, set SNIFFR_CMD='<cmd>', or run 'sniffr doctor'."
+  done
 fi
 [ -n "${HERDR_SOCKET_PATH:-}" ] || die "not inside herdr — run this from a herdr pane"
 resolve "$target"
@@ -564,8 +550,8 @@ esac
 
 # review in a detached background worker; it injects into the backend when ready
 log="${TMPDIR:-/tmp}/sniffr-${num}.log"
-SNIFFR_AGENT="$AGENT" nohup "$0" --worker "$target" "$pid" "$backend" >"$log" 2>&1 </dev/null &
+SNIFFR_AGENT="$AGENT" SNIFFR_MODEL="${MODEL_OPT:-${SNIFFR_MODEL:-}}" nohup "$0" --worker "$target" "$pid" "$backend" >"$log" 2>&1 </dev/null &
 disown 2>/dev/null || true
-notify "sniffr" "$AGENT is sniffing PR #${num} in the background…"
-echo "sniffr: opened #${num} in ${backend} — $AGENT sniffing in the background."
+notify "sniffr" "${AGENT} is sniffing PR #${num} in the background…"
+echo "sniffr: opened #${num} in ${backend} — ${AGENT} sniffing in the background."
 echo "  ${url}"
